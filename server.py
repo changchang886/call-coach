@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-📞 打电话话术教练 v2 — 带社交社区
-选场景 → AI 话术 → 分享到广场 → 投票 → 转播
+📞 最强模拟 — 选场景 · 练真话 · 拿剧本 · 播出去
 """
 
 import json
@@ -253,7 +252,7 @@ HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>📞 打电话话术教练</title>
+<title>📞 最强模拟</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);min-height:100vh;color:#e2e8f0}
@@ -347,7 +346,7 @@ header p{color:#94a3b8;font-size:.9rem}
 </head>
 <body>
 <div class="container">
-<header><h1>📞 打电话话术教练</h1><p>选场景 · 出话术 · 分享社区</p></header>
+<header><h1>📞 最强模拟</h1><p>选场景 · 练真话 · 拿剧本 · 播出去</p></header>
 
 <div class="tabs">
   <button class="tab active" onclick="switchTab('generate')">⚡ 生成话术</button>
@@ -452,7 +451,7 @@ header p{color:#94a3b8;font-size:.9rem}
   </div>
 </div>
 
-<div class="footer">AI Phone Call Coach · 话术仅供参考</div>
+<div class="footer">最强模拟 · 话术仅供参考</div>
 
 <script>
 const SCENES = """ + json.dumps(SCENES) + r""";
@@ -1044,7 +1043,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = 8765
-    print(f"\n📞 打电话话术教练 v2 启动！")
+    print(f"\n📞 最强模拟 启动！")
     print(f"   浏览器打开 → http://localhost:{port}")
     print(f"   社区数据: {DATA_FILE}\n")
     server = HTTPServer(("0.0.0.0", port), Handler)
