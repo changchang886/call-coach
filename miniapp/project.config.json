@@ -6,7 +6,7 @@
     "postcss": true,
     "minified": true
   },
-  "appid": "YOUR_APPID_HERE",
+  "appid": "gh_356ff36e049c",
   "projectname": "最强模拟",
   "condition": {
     "miniprogram": {
