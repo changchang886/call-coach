@@ -1,0 +1,40 @@
+<!-- 最强模拟 · 首页 -->
+<view class="container">
+  <view class="header">
+    <text class="title">📞 最强模拟</text>
+    <text class="subtitle">选场景 · 练真话 · 拿剧本 · 播出去</text>
+  </view>
+
+  <!-- 场景选择 -->
+  <view class="scene-grid">
+    <view 
+      wx:for="{{scenes}}" wx:key="key"
+      class="scene-card {{selected === item.key ? 'active' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onSceneTap"
+    >
+      <text class="scene-emoji">{{item.emoji}}</text>
+      <text class="scene-name">{{item.name.slice(2)}}</text>
+      <text class="scene-goal">{{item.goal}}</text>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view wx:if="{{showActions}}" class="actions">
+    <view class="action-hint">已选：{{actionLabel}}</view>
+    <button class="btn btn-primary" bindtap="startTraining">
+      🎯 实战训练 — 先练再拿剧本
+    </button>
+    <button class="btn btn-secondary" bindtap="generateDirect">
+      ⚡ 直接生成 — 跳过练习
+    </button>
+    <button class="btn btn-voice" bindtap="startVoiceReview">
+      🎙️ 语音复盘 — 录完分析
+    </button>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{!showActions}}" class="empty-hint">
+    <text>👆 选一个场景开始</text>
+  </view>
+</view>

@@ -1,0 +1,80 @@
+<!-- 训练页 -->
+<view class="container">
+
+  <!-- 语音模式 -->
+  <view wx:if="{{mode === 'voice'}}" class="voice-mode">
+    <view class="voice-header">
+      <text class="voice-title">🎙️ 语音复盘</text>
+      <text class="voice-desc">{{sceneName.slice(2)}} · 对着手机讲一遍</text>
+    </view>
+    <view class="record-area">
+      <view class="record-btn {{recording ? 'recording' : ''}}" bindtap="toggleRecording">
+        <text class="record-icon">{{recording ? '⏹' : '🎤'}}</text>
+        <text class="record-text">{{recording ? '录音中... ' + recordTime + 's' : '点击开始录音'}}</text>
+      </view>
+      <text class="record-hint">按下开始，对着手机说出你要讲的话</text>
+    </view>
+    <button class="btn btn-primary" bindtap="endTraining" wx:if="{{!recording}}">
+      📊 分析并生成优化剧本
+    </button>
+  </view>
+
+  <!-- 训练模式 -->
+  <view wx:if="{{mode === 'train'}}" class="train-mode">
+    <view class="chat-header">
+      <text class="chat-scene">{{sceneName}}</text>
+      <text class="chat-persona">✆ {{persona}} 已接通</text>
+    </view>
+
+    <!-- 分享按钮 -->
+    <view class="share-bar">
+      <button class="share-btn" bindtap="shareToCoach" size="mini">🔗 分享给教练</button>
+      <text wx:if="{{shareCode}}" class="share-code">码：{{shareCode}}</text>
+    </view>
+
+    <!-- 教练提示 -->
+    <view wx:if="{{coachTips.length}}" class="coach-tips">
+      <view wx:for="{{coachTips}}" wx:key="time" class="coach-tip-item">
+        💡 教练：{{item.message}}
+      </view>
+    </view>
+
+    <!-- 对话区 -->
+    <scroll-view class="chat-area" scroll-y scroll-into-view="msg-{{messages.length - 1}}">
+      <view wx:for="{{messages}}" wx:key="index" id="msg-{{index}}" class="msg-item">
+        <view wx:if="{{item.role === 'assistant'}}" class="msg-bot">
+          <text class="msg-label">✆ {{persona}}</text>
+          <view class="msg-bubble msg-bubble-bot">{{item.content}}</view>
+        </view>
+        <view wx:else class="msg-user">
+          <text class="msg-label">你</text>
+          <view class="msg-bubble msg-bubble-user">{{item.content}}</view>
+        </view>
+      </view>
+
+      <view wx:if="{{loading}}" class="msg-typing">
+        <text>对方正在输入...</text>
+      </view>
+
+      <view wx:if="{{showEndHint}}" class="end-hint">
+        💡 已经练了{{turnCount}}轮，点击结束查看评分和完整剧本
+      </view>
+    </scroll-view>
+
+    <!-- 输入 + 操作 -->
+    <view class="input-bar">
+      <button class="end-btn" bindtap="endTraining" size="mini">📊 结束</button>
+      <input 
+        class="chat-input"
+        value="{{inputText}}"
+        placeholder="说你的台词..."
+        bindinput="onInput"
+        bindconfirm="sendMessage"
+        confirm-type="send"
+        adjust-position
+      />
+      <button class="send-btn" bindtap="sendMessage" size="mini" disabled="{{!inputText}}">发送</button>
+    </view>
+  </view>
+
+</view>

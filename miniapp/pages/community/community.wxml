@@ -1,0 +1,41 @@
+<!-- 广场页 -->
+<view class="container">
+  <view class="tab-bar">
+    <view class="tab {{activeTab==='scripts'?'active':''}}" data-tab="scripts" bindtap="switchTab">🔥 话术广场</view>
+    <view class="tab {{activeTab==='stories'?'active':''}}" data-tab="stories" bindtap="switchTab">💬 成功故事</view>
+  </view>
+
+  <scroll-view scroll-y class="feed-list" wx:if="{{!loading}}">
+
+    <!-- 话术广场 -->
+    <block wx:if="{{activeTab === 'scripts'}}">
+      <view wx:if="{{scripts.length === 0}}" class="empty">还没有人分享话术，来当第一个！</view>
+      <view wx:for="{{scripts}}" wx:key="id" class="feed-card">
+        <view class="feed-header">
+          <text class="feed-scene">{{SCENES[item.scene].name || item.scene}}</text>
+          <text class="feed-time">{{timeAgo(item.time)}}</text>
+        </view>
+        <text class="feed-preview">{{item.preview}}</text>
+        <view class="feed-actions">
+          <text class="feed-action" data-id="{{item.id}}" bindtap="vote">🔼 {{item.votes}}</text>
+          <text class="feed-action" data-id="{{item.id}}" bindtap="replay">📢 转播 {{item.replays || 0}}</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- 成功故事 -->
+    <block wx:if="{{activeTab === 'stories'}}">
+      <view wx:if="{{stories.length === 0}}" class="empty">还没有故事，来写第一个！</view>
+      <view wx:for="{{stories}}" wx:key="time" class="story-card">
+        <text class="story-text">{{item.text}}</text>
+        <view class="story-footer">
+          <text class="story-author">🗣️ 匿名网友</text>
+          <text class="feed-time">{{timeAgo(item.time)}}</text>
+        </view>
+      </view>
+    </block>
+
+  </scroll-view>
+
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+</view>

@@ -1,0 +1,21 @@
+/* 全局样式 */
+page {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+::-webkit-scrollbar { width: 0; height: 0; }
+
+/* 通用按钮 */
+.btn-primary {
+  background: linear-gradient(135deg, #38bdf8, #818cf8) !important;
+  color: #fff !important;
+}
+.btn-secondary {
+  background: transparent !important;
+  border: 2rpx solid rgba(56,189,248,0.3) !important;
+  color: #38bdf8 !important;
+}
