@@ -61,11 +61,14 @@ SCENES = {
 
 # ── Role-Play Sessions (in-memory) ──
 ROLEPLAY_SESSIONS = {}
+PUBLIC_SESSIONS = {}  # share_code → {sid, scene, history, coach_tips, viewers}
 
-def roleplay_start(scene_key):
+def roleplay_start(scene_key, share=False):
     """Start a role-play session. AI plays the other person."""
     scene = SCENES[scene_key]
     sid = str(uuid.uuid4())[:8]
+    share_code = None
+    
     system_prompt = f"""你现在正在扮演{scene['persona']}。
 
 这是一个模拟电话通话。对方打电话给你，话题是：{scene['goal']}。
@@ -89,8 +92,17 @@ def roleplay_start(scene_key):
         opening_line = "喂？哪位？"
         history.append({"role": "assistant", "content": opening_line})
 
-    ROLEPLAY_SESSIONS[sid] = {"scene": scene_key, "history": history, "turn": 0}
-    return {"session": sid, "role": scene['persona'], "message": opening_line, "scene": scene_key}
+    ROLEPLAY_SESSIONS[sid] = {"scene": scene_key, "history": history, "turn": 0, "share_code": None}
+    
+    if share:
+        share_code = str(uuid.uuid4())[:6].upper()
+        ROLEPLAY_SESSIONS[sid]["share_code"] = share_code
+        PUBLIC_SESSIONS[share_code] = {
+            "sid": sid, "scene": scene_key, "persona": scene['persona'],
+            "history": list(history), "coach_tips": [], "active": True
+        }
+    
+    return {"session": sid, "role": scene['persona'], "message": opening_line, "scene": scene_key, "share_code": share_code}
 
 def roleplay_turn(sid, user_msg):
     """User speaks, AI (as the other person) responds."""
@@ -109,7 +121,14 @@ def roleplay_turn(sid, user_msg):
         reply = "嗯，你继续说。（信号不太好）"
 
     sess["history"].append({"role": "assistant", "content": reply})
-    return {"message": reply, "turn": sess["turn"]}
+    
+    # Sync to public session if shared
+    sc = sess.get("share_code")
+    if sc and sc in PUBLIC_SESSIONS:
+        ps = PUBLIC_SESSIONS[sc]
+        ps["history"] = list(sess["history"])
+    
+    return {"message": reply, "turn": sess["turn"], "coach_tips": PUBLIC_SESSIONS.get(sc, {}).get("coach_tips", []) if sc else []}
 
 def roleplay_end(sid):
     """End role-play and get feedback."""
@@ -148,6 +167,49 @@ score 满分10分"""
         pass
 
     return {"score": 7, "good": ["你敢于开口了"], "improve": ["可以更自信一些"], "summary": "再接再厉！"}
+
+def roleplay_share(sid):
+    """Make an existing session public and return share code."""
+    if sid not in ROLEPLAY_SESSIONS:
+        return {"error": "会话不存在"}
+    sess = ROLEPLAY_SESSIONS[sid]
+    if sess.get("share_code"):
+        return {"share_code": sess["share_code"]}
+    share_code = str(uuid.uuid4())[:6].upper()
+    sess["share_code"] = share_code
+    scene = SCENES[sess["scene"]]
+    PUBLIC_SESSIONS[share_code] = {
+        "sid": sid, "scene": sess["scene"], "persona": scene['persona'],
+        "history": list(sess["history"]), "coach_tips": [], "active": True
+    }
+    return {"share_code": share_code}
+
+def coach_watch(code):
+    """Coach watches a public session."""
+    if code not in PUBLIC_SESSIONS:
+        return {"error": "会话不存在或已结束"}
+    ps = PUBLIC_SESSIONS[code]
+    msgs = []
+    for m in ps["history"]:
+        if m["role"] == "system":
+            continue
+        role = "对方" if m["role"] == "assistant" else "求助者"
+        msgs.append({"role": role, "content": m["content"]})
+    return {
+        "scene": ps["scene"],
+        "persona": ps["persona"],
+        "messages": msgs,
+        "coach_tips": ps["coach_tips"],
+        "active": ps["active"]
+    }
+
+def coach_tip(code, message):
+    """Coach sends a tip to the trainee."""
+    if code not in PUBLIC_SESSIONS:
+        return {"error": "会话不存在"}
+    ps = PUBLIC_SESSIONS[code]
+    ps["coach_tips"].append({"message": message, "time": time.time()})
+    return {"ok": True}
 
 # ── Script Generation ──
 def generate_script(scene_key):
@@ -328,6 +390,29 @@ header p{color:#94a3b8;font-size:.9rem}
 
 <!-- TAB 4: Role-Play Simulation -->
 <div class="panel" id="panel-roleplay">
+  <!-- Coach Join Card -->
+  <div class="card" style="margin-bottom:14px;border:1px dashed rgba(251,191,36,.3);background:rgba(251,191,36,.04)" id="coach-join">
+    <h3 style="color:#fbbf24;font-size:.85rem;margin-bottom:8px">👀 观看他人训练（教练模式）</h3>
+    <p style="color:#94a3b8;font-size:.78rem;margin-bottom:10px">输入分享码，实时观看求助者的演练并发送提示</p>
+    <div style="display:flex;gap:8px">
+      <input id="coach-code-input" type="text" placeholder="输入6位分享码" maxlength="6" style="flex:1;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e2e8f0;font-size:.85rem;text-transform:uppercase">
+      <button class="btn btn-primary" style="width:auto;padding:10px 18px;font-size:.85rem" onclick="joinCoach()">进入观看</button>
+    </div>
+  </div>
+  <div id="coach-view" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="color:#fbbf24;font-size:.8rem">👀 教练模式</span>
+        <button class="btn btn-outline" style="width:auto;padding:4px 12px;font-size:.7rem" onclick="leaveCoach()">退出</button>
+      </div>
+      <div id="coach-msgs" style="max-height:300px;overflow-y:auto;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px">
+        <input id="coach-tip-input" type="text" placeholder="发送提示给求助者..." style="flex:1;padding:8px;background:rgba(255,255,255,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;color:#fbbf24;font-size:.82rem" onkeydown="if(event.key==='Enter')sendCoachTip()">
+        <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:.82rem;background:#f59e0b" onclick="sendCoachTip()">💡 提示</button>
+      </div>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:14px" id="rp-setup">
     <h3 style="color:#38bdf8;font-size:.9rem;margin-bottom:10px">🎭 选择场景开始演练</h3>
     <select id="rp-scene" style="width:100%;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e2e8f0;font-size:.9rem;margin-bottom:10px">
@@ -447,7 +532,10 @@ async function startTraining() {
     chat.innerHTML = `
       <div style="text-align:center;margin-bottom:12px">
         <span style="background:rgba(56,189,248,.15);color:#38bdf8;padding:4px 12px;border-radius:12px;font-size:.8rem">🎯 实战训练 · ${persona}已接通</span>
+        <span id="train-share-btn" style="margin-left:8px"><button class="btn btn-outline" style="width:auto;padding:3px 10px;font-size:.7rem" onclick="shareTraining()">🔗 分享给教练</button></span>
+        <span id="train-code-display" style="display:none;color:#fbbf24;font-size:.75rem;margin-left:8px">码：<b id="train-code"></b></span>
       </div>
+      <div id="train-coach-tips" style="display:none;margin-bottom:8px"></div>
       <div id="train-msgs" style="max-height:350px;overflow-y:auto;margin-bottom:10px">
         <div style="margin-bottom:8px">
           <div style="color:#94a3b8;font-size:.7rem;margin-bottom:2px">✆ ${persona}</div>
@@ -483,6 +571,13 @@ async function sendTrainTurn() {
     if (data.error) { toast(data.error); input.disabled=false; return; }
     msgs.innerHTML += `<div style="margin-bottom:8px"><div style="color:#94a3b8;font-size:.7rem;margin-bottom:2px">✆ ${persona}</div><div style="background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.15);border-radius:8px;padding:10px 12px;color:#e2e8f0;font-size:.9rem;line-height:1.6">${data.message}</div></div>`;
     msgs.scrollTop = msgs.scrollHeight;
+
+    // Show coach tips
+    if (data.coach_tips && data.coach_tips.length > 0) {
+      const tipsDiv = document.getElementById('train-coach-tips');
+      tipsDiv.style.display='block';
+      tipsDiv.innerHTML = data.coach_tips.map(t => `<div style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);border-radius:6px;padding:5px 10px;margin-bottom:3px;color:#fbbf24;font-size:.76rem">💡 教练：${t.message}</div>`).join('');
+    }
 
     // Auto-prompt to end after a few turns
     if (trainTurnCount >= MAX_TRAIN_TURNS) {
@@ -743,6 +838,74 @@ async function endRoleplay() {
   } catch(e) { toast('评估失败'); }
 }
 
+// ── Coach 1-on-1 Relay ──
+let coachCode = null;
+let coachPollTimer = null;
+
+async function shareTraining() {
+  if (!trainSession) return;
+  try {
+    const res = await fetch('/api/roleplay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'share',session:trainSession})});
+    const data = await res.json();
+    if (data.share_code) {
+      document.getElementById('train-code').textContent = data.share_code;
+      document.getElementById('train-code-display').style.display='inline';
+      document.getElementById('train-share-btn').style.display='none';
+      toast('✅ 分享码：'+data.share_code);
+    }
+  } catch(e) { toast('分享失败'); }
+}
+
+async function joinCoach() {
+  const code = document.getElementById('coach-code-input').value.trim().toUpperCase();
+  if (!code) return toast('输入分享码');
+  coachCode = code;
+  document.getElementById('coach-join').style.display='none';
+  document.getElementById('rp-setup').style.display='none';
+  document.getElementById('coach-view').style.display='block';
+  coachPoll();
+  coachPollTimer = setInterval(coachPoll, 2000);
+}
+
+async function coachPoll() {
+  if (!coachCode) return;
+  try {
+    const res = await fetch('/api/coach/watch?code='+coachCode);
+    const data = await res.json();
+    if (data.error || !data.active) {
+      clearInterval(coachPollTimer);
+      document.getElementById('coach-view').innerHTML = '<div class="card"><p style="color:#94a3b8;text-align:center">会话已结束</p><button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="leaveCoach()">返回</button></div>';
+      return;
+    }
+    const msgs = document.getElementById('coach-msgs');
+    msgs.innerHTML = '<div style="text-align:center;margin-bottom:6px"><span style="background:rgba(56,189,248,.15);color:#38bdf8;padding:2px 10px;border-radius:10px;font-size:.72rem">'+data.persona+' · 实时对话</span></div>';
+    data.messages.forEach(m => {
+      const color = m.role==='对方'?'rgba(129,140,248,.08)':'rgba(56,189,248,.08)';
+      const border = m.role==='对方'?'border:1px solid rgba(129,140,248,.15)':'';
+      msgs.innerHTML += `<div style="margin-bottom:6px"><span style="color:#94a3b8;font-size:.65rem">${m.role}</span><div style="background:${color};${border}border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.82rem;line-height:1.5">${m.content}</div></div>`;
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch(e) {}
+}
+
+async function sendCoachTip() {
+  const input = document.getElementById('coach-tip-input');
+  const msg = input.value.trim();
+  if (!msg || !coachCode) return;
+  input.value='';
+  await fetch('/api/roleplay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'coach_tip',code:coachCode,message:msg})});
+  toast('💡 提示已发送');
+}
+
+function leaveCoach() {
+  clearInterval(coachPollTimer);
+  coachCode = null;
+  document.getElementById('coach-join').style.display='block';
+  document.getElementById('rp-setup').style.display='block';
+  document.getElementById('coach-view').style.display='none';
+  document.getElementById('coach-msgs').innerHTML='';
+}
+
 function resetRoleplay() {
   rpSession = null;
   document.getElementById('rp-chat').style.display='none';
@@ -800,6 +963,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(data)
         elif p.path == "/api/community":
             self._json(load_community())
+        elif p.path == "/api/coach/watch":
+            params = parse_qs(p.query)
+            self._json(coach_watch(params.get("code", [""])[0]))
         else:
             self.send_error(404)
 
@@ -846,11 +1012,15 @@ class Handler(BaseHTTPRequestHandler):
         elif p.path == "/api/roleplay":
             action = body.get("action", "")
             if action == "start":
-                self._json(roleplay_start(body.get("scene", "salary")))
+                self._json(roleplay_start(body.get("scene", "salary"), body.get("share", False)))
             elif action == "turn":
                 self._json(roleplay_turn(body.get("session", ""), body.get("message", "")))
             elif action == "end":
                 self._json(roleplay_end(body.get("session", "")))
+            elif action == "share":
+                self._json(roleplay_share(body.get("session", "")))
+            elif action == "coach_tip":
+                self._json(coach_tip(body.get("code", ""), body.get("message", "")))
             else:
                 self._json({"error": "Unknown action"})
         else:
