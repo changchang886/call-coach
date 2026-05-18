@@ -1042,7 +1042,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = 8765
+    port = int(os.environ.get("PORT", 8765))
     print(f"\n📞 最强模拟 启动！")
     print(f"   浏览器打开 → http://localhost:{port}")
     print(f"   社区数据: {DATA_FILE}\n")
