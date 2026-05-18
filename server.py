@@ -59,6 +59,97 @@ SCENES = {
     "deposit": {"name": "🏠 退押金", "goal": "向房东要回押金", "persona": "房东", "vibe": "有理有据，引用合同"},
 }
 
+# ── Role-Play Sessions (in-memory) ──
+ROLEPLAY_SESSIONS = {}
+
+def roleplay_start(scene_key):
+    """Start a role-play session. AI plays the other person."""
+    scene = SCENES[scene_key]
+    sid = str(uuid.uuid4())[:8]
+    system_prompt = f"""你现在正在扮演{scene['persona']}。
+
+这是一个模拟电话通话。对方打电话给你，话题是：{scene['goal']}。
+
+你的角色设定：
+- 你的态度基调：{scene['vibe']}
+- 你是真实的普通人，不是NPC。你不会说"好的我同意"——你有自己的顾虑、立场和情绪
+- 你的反应要合理：有时犹豫、有时反问、有时拒绝、有时讨价还价
+- 不要一次说太多，每次回1-3句话，像真实通话
+- 对话开头你接起电话，说一声"喂？"或类似的"""
+
+    history = [{"role": "system", "content": system_prompt}]
+    
+    try:
+        resp = ai_client.chat.completions.create(
+            model=ai_model, messages=history + [{"role": "user", "content": "电话铃声响了，请接起电话。只说开场白。"}],
+            max_tokens=100, temperature=0.9)
+        opening_line = resp.choices[0].message.content.strip()
+        history.append({"role": "assistant", "content": opening_line})
+    except Exception as e:
+        opening_line = "喂？哪位？"
+        history.append({"role": "assistant", "content": opening_line})
+
+    ROLEPLAY_SESSIONS[sid] = {"scene": scene_key, "history": history, "turn": 0}
+    return {"session": sid, "role": scene['persona'], "message": opening_line, "scene": scene_key}
+
+def roleplay_turn(sid, user_msg):
+    """User speaks, AI (as the other person) responds."""
+    if sid not in ROLEPLAY_SESSIONS:
+        return {"error": "会话已过期，请重新开始"}
+    sess = ROLEPLAY_SESSIONS[sid]
+    sess["history"].append({"role": "user", "content": user_msg})
+    sess["turn"] += 1
+
+    try:
+        resp = ai_client.chat.completions.create(
+            model=ai_model, messages=sess["history"],
+            max_tokens=150, temperature=0.9)
+        reply = resp.choices[0].message.content.strip()
+    except Exception as e:
+        reply = "嗯，你继续说。（信号不太好）"
+
+    sess["history"].append({"role": "assistant", "content": reply})
+    return {"message": reply, "turn": sess["turn"]}
+
+def roleplay_end(sid):
+    """End role-play and get feedback."""
+    if sid not in ROLEPLAY_SESSIONS:
+        return {"error": "会话已过期"}
+    sess = ROLEPLAY_SESSIONS.pop(sid)
+
+    # Build feedback prompt
+    dialogue = "\n".join([f"{'对方' if m['role']=='assistant' else '你'}: {m['content']}"
+                          for m in sess["history"] if m["role"] != "system"])
+    scene = SCENES[sess["scene"]]
+
+    try:
+        resp = ai_client.chat.completions.create(
+            model=ai_model,
+            messages=[{
+                "role": "user",
+                "content": f"""你是电话沟通教练。评估以下模拟通话：
+
+场景：{scene['goal']}
+对象：{scene['persona']}
+
+通话记录：
+{dialogue}
+
+请用 JSON 格式返回评估结果：
+{{"score": 8, "good": ["做得好的点1", "点2"], "improve": ["需要改进的点1", "点2"], "summary": "一句话总结"}}
+
+score 满分10分"""
+            }],
+            max_tokens=400, temperature=0.7)
+        text = resp.choices[0].message.content.strip()
+        m = re.search(r'\{[\s\S]*\}', text)
+        if m: return json.loads(m.group())
+    except Exception:
+        pass
+
+    return {"score": 7, "good": ["你敢于开口了"], "improve": ["可以更自信一些"], "summary": "再接再厉！"}
+
+# ── Script Generation ──
 def generate_script(scene_key):
     scene = SCENES[scene_key]
     prompt = f"""你是电话沟通教练。生成话术剧本，JSON格式：
@@ -200,6 +291,7 @@ header p{color:#94a3b8;font-size:.9rem}
   <button class="tab active" onclick="switchTab('generate')">⚡ 生成话术</button>
   <button class="tab" onclick="switchTab('community')">🔥 话术广场</button>
   <button class="tab" onclick="switchTab('stories')">💬 成功故事</button>
+  <button class="tab" onclick="switchTab('roleplay')">🎭 角色演练</button>
 </div>
 
 <!-- TAB 1: Generate -->
@@ -226,6 +318,31 @@ header p{color:#94a3b8;font-size:.9rem}
     <button class="btn btn-outline" style="width:auto;padding:8px 16px" onclick="showStoryModal()">✏️ 写故事</button>
   </div>
   <div id="story-feed"></div>
+</div>
+
+<!-- TAB 4: Role-Play Simulation -->
+<div class="panel" id="panel-roleplay">
+  <div class="card" style="margin-bottom:14px" id="rp-setup">
+    <h3 style="color:#38bdf8;font-size:.9rem;margin-bottom:10px">🎭 选择场景开始演练</h3>
+    <select id="rp-scene" style="width:100%;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e2e8f0;font-size:.9rem;margin-bottom:10px">
+      ${Object.entries(SCENES).map(([k,s])=>`<option value="${k}">${s.name} — ${s.persona}</option>`).join('')}
+    </select>
+    <button class="btn btn-primary" onclick="startRoleplay()">📞 开始通话</button>
+  </div>
+
+  <div id="rp-chat" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="color:#94a3b8;font-size:.85rem" id="rp-info"></span>
+      <button class="btn btn-outline" style="width:auto;padding:6px 14px;font-size:.8rem" onclick="endRoleplay()">📊 结束并评分</button>
+    </div>
+    <div id="rp-messages" style="max-height:400px;overflow-y:auto;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <input id="rp-input" type="text" placeholder="输入你要说的话..." style="flex:1;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e2e8f0;font-size:.9rem" onkeydown="if(event.key==='Enter')sendRoleplayTurn()">
+      <button class="btn btn-primary" style="width:auto;padding:12px 20px" onclick="sendRoleplayTurn()">发送</button>
+    </div>
+  </div>
+
+  <div id="rp-feedback" style="display:none"></div>
 </div>
 
 </div>
@@ -255,7 +372,8 @@ let currentScript = null;
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelector(`.tab:nth-child(${tab==='generate'?1:tab==='community'?2:3})`).classList.add('active');
+  const idx = tab==='generate'?1:tab==='community'?2:tab==='stories'?3:4;
+  document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
   document.getElementById('panel-'+tab).classList.add('active');
   if (tab==='community') refreshFeed();
   if (tab==='stories') refreshStories();
@@ -399,6 +517,109 @@ async function postStory() {
   refreshStories();
 }
 
+// ── Role-Play Simulation ──
+let rpSession = null;
+
+async function startRoleplay() {
+  const scene = document.getElementById('rp-scene').value;
+  document.getElementById('rp-setup').style.display='none';
+  document.getElementById('rp-chat').style.display='block';
+  document.getElementById('rp-feedback').style.display='none';
+  document.getElementById('rp-messages').innerHTML='<div class="loading show"><div class="spinner"></div><p style="color:#94a3b8">接通中...</p></div>';
+
+  try {
+    const res = await fetch('/api/roleplay', {
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'start', scene})
+    });
+    const data = await res.json();
+    rpSession = data.session;
+    document.getElementById('rp-info').textContent = `对方：${data.role}  |  场景：${SCENES[scene]?.name}`;
+    document.getElementById('rp-messages').innerHTML = `
+      <div style="margin-bottom:10px">
+        <div style="color:#94a3b8;font-size:.75rem;margin-bottom:3px">✆ ${data.role} 接起电话</div>
+        <div class="script-line" style="background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.15)">${data.message}</div>
+      </div>`;
+    document.getElementById('rp-input').focus();
+  } catch(e) { toast('连接失败'); }
+}
+
+async function sendRoleplayTurn() {
+  const input = document.getElementById('rp-input');
+  const msg = input.value.trim();
+  if (!msg || !rpSession) return;
+  input.value=''; input.disabled=true;
+
+  const msgs = document.getElementById('rp-messages');
+  msgs.innerHTML += `<div style="margin-bottom:10px;text-align:right">
+    <div style="color:#38bdf8;font-size:.75rem;margin-bottom:3px">你 说</div>
+    <div class="script-line" style="background:rgba(56,189,248,.08);text-align:left;display:inline-block">${msg}</div>
+  </div>`;
+  msgs.innerHTML += '<div class="loading show" style="padding:8px"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div>';
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const res = await fetch('/api/roleplay', {
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'turn', session:rpSession, message:msg})
+    });
+    const data = await res.json();
+    document.querySelector('#rp-messages .loading').remove();
+    if (data.error) { toast(data.error); return; }
+    msgs.innerHTML += `<div style="margin-bottom:10px">
+      <div style="color:#94a3b8;font-size:.75rem;margin-bottom:3px">✆ 对方 说</div>
+      <div class="script-line" style="background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.15)">${data.message}</div>
+    </div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch(e) { toast('发送失败'); }
+  input.disabled=false; input.focus();
+}
+
+async function endRoleplay() {
+  if (!rpSession) return;
+  document.getElementById('rp-input').disabled=true;
+  document.getElementById('rp-messages').innerHTML += '<div class="loading show" style="padding:8px"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div><p style="color:#94a3b8;font-size:.8rem">AI 正在评估...</p></div>';
+
+  try {
+    const res = await fetch('/api/roleplay', {
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'end', session:rpSession})
+    });
+    const data = await res.json();
+    rpSession = null;
+    document.getElementById('rp-chat').style.display='none';
+
+    const fb = document.getElementById('rp-feedback');
+    fb.style.display='block';
+    const scoreColor = data.score>=8?'#4ade80':data.score>=6?'#fbbf24':'#f87171';
+    fb.innerHTML = `
+      <div class="card">
+        <div style="text-align:center;padding:10px 0">
+          <div style="font-size:3rem;color:${scoreColor};font-weight:bold">${data.score}<span style="font-size:1rem;color:#94a3b8">/10</span></div>
+          <p style="color:#e2e8f0;margin-top:8px">${data.summary||''}</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#4ade80;font-size:.85rem">👍 做得好的</h3>
+        <ul class="tips-list">${(data.good||[]).map(g=>`<li style="color:#94a3b8">${g}</li>`).join('')}</ul>
+      </div>
+      <div class="card">
+        <h3 style="color:#f87171;font-size:.85rem">🔧 可以改进</h3>
+        <ul class="tips-list">${(data.improve||[]).map(i=>`<li style="color:#94a3b8">${i}</li>`).join('')}</ul>
+      </div>
+      <button class="btn btn-primary" onclick="resetRoleplay()">🔄 再练一次</button>
+    `;
+  } catch(e) { toast('评估失败'); }
+}
+
+function resetRoleplay() {
+  rpSession = null;
+  document.getElementById('rp-chat').style.display='none';
+  document.getElementById('rp-feedback').style.display='none';
+  document.getElementById('rp-setup').style.display='block';
+  document.getElementById('rp-messages').innerHTML='';
+}
+
 // ── Utils ──
 function timeAgo(ts) {
   const diff = Math.floor((Date.now()/1000) - ts);
@@ -468,6 +689,16 @@ class Handler(BaseHTTPRequestHandler):
             data["stories"].append({"text": body.get("text", ""), "time": time.time()})
             save_community(data)
             self._json({"ok": True})
+        elif p.path == "/api/roleplay":
+            action = body.get("action", "")
+            if action == "start":
+                self._json(roleplay_start(body.get("scene", "salary")))
+            elif action == "turn":
+                self._json(roleplay_turn(body.get("session", ""), body.get("message", "")))
+            elif action == "end":
+                self._json(roleplay_end(body.get("session", "")))
+            else:
+                self._json({"error": "Unknown action"})
         else:
             self.send_error(404)
 
