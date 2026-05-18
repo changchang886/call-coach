@@ -950,7 +950,13 @@ function toast(msg) {
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
-        if p.path in ["/", "/index.html"]:
+        if p.path.startswith("/login-qr.png"):
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            with open("login-qr.png", "rb") as f:
+                self.wfile.write(f.read())
+        elif p.path in ["/", "/index.html"]:
             self._html(HTML)
         elif p.path == "/api/generate":
             params = parse_qs(p.query)

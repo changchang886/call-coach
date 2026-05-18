@@ -1,6 +1,6 @@
 // ── API 配置 ──
 // 部署后把下面地址换成你的真实域名
-const API_BASE = 'https://4fdb48b4809be5.lhr.life'
+const API_BASE = 'https://ping-upgrade-wherever-string.trycloudflare.com'
 
 // ── 场景定义 ──
 const SCENES = {
