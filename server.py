@@ -525,10 +525,21 @@ async function endTraining() {
         <h3 style="color:#f87171;font-size:.8rem">🔧 可以改进</h3>
         <ul class="tips-list">${(fb.improve||[]).map(i=>`<li>${i}</li>`).join('')}</ul>
       </div>
-      <div style="text-align:center;padding:16px 0 8px">
-        <div style="color:#38bdf8;font-size:.9rem;margin-bottom:8px">🔓 完整话术剧本已解锁 ↓</div>
+      <div class="card" id="phone-card" style="border:1px dashed rgba(251,191,36,.3);background:rgba(251,191,36,.04)">
+        <h3 style="color:#fbbf24;font-size:.85rem;margin-bottom:8px">📱 保存你的训练记录</h3>
+        <p style="color:#94a3b8;font-size:.8rem;margin-bottom:10px">留下手机号，我们会记录你的练习进度。新场景上线第一时间通知你。</p>
+        <div style="display:flex;gap:8px">
+          <input id="phone-input" type="tel" placeholder="输入手机号（选填）" style="flex:1;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e2e8f0;font-size:.85rem">
+          <button class="btn btn-primary" style="width:auto;padding:10px 18px;font-size:.85rem" onclick="savePhone()">保存</button>
+        </div>
+        <p style="color:#64748b;font-size:.7rem;text-align:center;margin-top:6px;cursor:pointer" onclick="skipPhone()">跳过 → 直接看剧本</p>
       </div>
-      ${renderScriptHTML(currentScript)}
+      <div id="script-reveal" style="display:none">
+        <div style="text-align:center;padding:16px 0 8px">
+          <div style="color:#38bdf8;font-size:.9rem;margin-bottom:8px">🔓 完整话术剧本已解锁 ↓</div>
+        </div>
+        ${renderScriptHTML(currentScript)}
+      </div>
     `;
     res.classList.add('show');
   } catch(e) {
@@ -740,6 +751,22 @@ function resetRoleplay() {
   document.getElementById('rp-messages').innerHTML='';
 }
 
+// ── Phone Collection ──
+async function savePhone() {
+  const phone = document.getElementById('phone-input').value.trim();
+  if (!phone || !/^1\d{10}$/.test(phone)) { toast('请输入有效的手机号'); return; }
+  try {
+    await fetch('/api/phone', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone, scene:selectedScene})});
+    document.getElementById('phone-card').style.display='none';
+    document.getElementById('script-reveal').style.display='block';
+    toast('✅ 已保存！');
+  } catch(e) { toast('保存失败'); }
+}
+function skipPhone() {
+  document.getElementById('phone-card').style.display='none';
+  document.getElementById('script-reveal').style.display='block';
+}
+
 // ── Utils ──
 function timeAgo(ts) {
   const diff = Math.floor((Date.now()/1000) - ts);
@@ -809,6 +836,13 @@ class Handler(BaseHTTPRequestHandler):
             data["stories"].append({"text": body.get("text", ""), "time": time.time()})
             save_community(data)
             self._json({"ok": True})
+        elif p.path == "/api/phone":
+            phone = body.get("phone", "").strip()
+            scene = body.get("scene", "")
+            data.setdefault("phones", [])
+            data["phones"].append({"phone": phone, "scene": scene, "time": time.time()})
+            save_community(data)
+            self._json({"ok": True, "count": len(data["phones"])})
         elif p.path == "/api/roleplay":
             action = body.get("action", "")
             if action == "start":
