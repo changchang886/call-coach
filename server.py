@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-📞 打电话话术教练 - Call Coach
-选场景 → AI 生成完整话术剧本 → 分叉脚本 + 语气提示
+📞 打电话话术教练 v2 — 带社交社区
+选场景 → AI 话术 → 分享到广场 → 投票 → 转播
 """
 
 import json
 import os
 import re
-import sys
+import time
+import uuid
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -19,260 +20,279 @@ def get_ai_client():
     api_key = os.environ.get("DEEPSEEK_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     model = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
-
     if not api_key:
         config_path = Path.home() / "ai-chat-loop" / "config.yaml"
         if config_path.exists():
-            try:
-                import yaml
-                with open(config_path) as f:
-                    cfg = yaml.safe_load(f)
-                api_key = cfg.get("deepseek", {}).get("api_key", "")
-            except Exception:
-                pass
-
+            import yaml
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f)
+            api_key = cfg.get("deepseek", {}).get("api_key", "")
     if not api_key:
         raise RuntimeError("No API key found")
     return OpenAI(api_key=api_key, base_url=base_url), model
 
-
 ai_client, ai_model = get_ai_client()
 
-# ── Scene Definitions ──
+# ── Community Storage ──
+DATA_FILE = Path(__file__).parent / "community.json"
+
+def load_community():
+    if DATA_FILE.exists():
+        try:
+            with open(DATA_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"scripts": [], "stories": []}
+
+def save_community(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+# ── Scenes ──
 SCENES = {
-    "salary": {
-        "name": "💰 谈薪资",
-        "emoji": "💰",
-        "goal": "和领导谈加薪/谈期望薪资",
-        "persona": "领导/HR",
-        "vibe": "自信而不冒犯，用数据说话",
-    },
-    "resign": {
-        "name": "🚪 提离职",
-        "emoji": "🚪",
-        "goal": "体面地提出离职",
-        "persona": "领导",
-        "vibe": "坚定但不敌对，感恩但明确",
-    },
-    "debt": {
-        "name": "💸 催还款",
-        "emoji": "💸",
-        "goal": "催朋友/同事还欠款",
-        "persona": "朋友/同事",
-        "vibe": "不伤和气但让对方无法推脱",
-    },
-    "leave": {
-        "name": "📅 请假",
-        "emoji": "📅",
-        "goal": "向领导请假（事假/病假/年假）",
-        "persona": "领导",
-        "vibe": "合理合法，提前安排好工作交接",
-    },
-    "overtime": {
-        "name": "❌ 拒绝加班",
-        "emoji": "❌",
-        "goal": "拒绝不合理加班要求",
-        "persona": "领导/同事",
-        "vibe": "坚定但有替代方案，不说'不想'说'不能'",
-    },
-    "deposit": {
-        "name": "🏠 退押金",
-        "emoji": "🏠",
-        "goal": "向房东要回租房押金",
-        "persona": "房东",
-        "vibe": "有理有据，引用合同/法律，不卑不亢",
-    },
+    "salary": {"name": "💰 谈薪资", "goal": "和领导谈加薪/谈期望薪资", "persona": "领导/HR", "vibe": "自信而不冒犯"},
+    "resign": {"name": "🚪 提离职", "goal": "体面地提出离职", "persona": "领导", "vibe": "坚定但不敌对"},
+    "debt": {"name": "💸 催还款", "goal": "催朋友/同事还欠款", "persona": "朋友/同事", "vibe": "不伤和气但无法推脱"},
+    "leave": {"name": "📅 请假", "goal": "向领导请假", "persona": "领导", "vibe": "合理合法，提前安排交接"},
+    "overtime": {"name": "❌ 拒绝加班", "goal": "拒绝不合理加班", "persona": "领导/同事", "vibe": "坚定但有替代方案"},
+    "deposit": {"name": "🏠 退押金", "goal": "向房东要回押金", "persona": "房东", "vibe": "有理有据，引用合同"},
 }
 
-
-def generate_script(scene_key: str) -> dict:
-    """Generate a complete phone call script for the given scene"""
+def generate_script(scene_key):
     scene = SCENES[scene_key]
+    prompt = f"""你是电话沟通教练。生成话术剧本，JSON格式：
 
-    prompt = f"""你是一个电话沟通教练。用户需要打一个电话：
+场景：{scene['goal']} | 对象：{scene['persona']} | 基调：{scene['vibe']}
 
-场景：{scene['goal']}
-对象：{scene['persona']}
-基调：{scene['vibe']}
-
-请生成一份完整的话术剧本，用 JSON 格式返回：
-
+返回JSON：
 {{
-  "opening": "开场白（第一句话，带【语气】标注）",
-  "main_script": "主体话术（3-4句话，每句带【语气】标注和停顿提示）",
-  "branches": [
-    {{
-      "if": "如果对方这样说...",
-      "reply": "你这样回...（带【语气】标注）"
-    }}
-  ],
-  "closing": "结尾话术（带【语气】标注）",
-  "tips": ["打电话前的准备提示", "语气提醒", "禁忌事项"]
+  "opening": "开场白（带【语气】标注，口语化能直接念）",
+  "main_script": ["话术1（带【语气】）", "话术2", "话术3"],
+  "branches": [{{"if": "如果对方说...", "reply": "你这样回...（带【语气】）"}}],
+  "closing": "结尾（带【语气】）",
+  "tips": ["提示1", "提示2", "提示3"]
 }}
-
-要求：
-- 话术要口语化，能直接念出来，不要书面语
-- 【语气】标注要具体：【平稳坚定】【微笑】【停顿1秒】【语速放缓】【压低声音】
-- branch 至少给 3 个对方可能的反应及应对
-- 整体要自然，听起来不像念稿子"""
+- 话术要口语，不书面
+- branches至少3个
+- 语气标注：【平稳】【微笑】【停顿1秒】【语速放缓】【坚定】"""
 
     try:
         response = ai_client.chat.completions.create(
-            model=ai_model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1500,
-            temperature=0.7,
-        )
+            model=ai_model, messages=[{"role": "user", "content": prompt}],
+            max_tokens=1200, temperature=0.7)
         text = response.choices[0].message.content.strip()
-
-        # Extract JSON
-        json_match = re.search(r'\{[\s\S]*\}', text)
-        if json_match:
-            return json.loads(json_match.group())
+        m = re.search(r'\{[\s\S]*\}', text)
+        if m: return json.loads(m.group())
     except Exception as e:
         print(f"AI error: {e}")
 
-    # Fallback script
     return {
         "opening": "您好，想占用您几分钟时间聊一件事。【平稳】",
-        "main_script": ["第一点，我想跟您反馈一下...【语气放缓】", "基于以上情况，我希望...【停顿1秒】【平稳坚定】"],
-        "branches": [
-            {"if": "如果对方说需要再考虑", "reply": "我理解需要时间，您看方便给我一个大概的时间节点吗？【礼貌追问】"},
-        ],
-        "closing": "感谢您的时间，期待您的回复。【微笑】",
-        "tips": ["选择对方心情好的时候打", "准备好数据支撑", "不要在电话里情绪化"],
+        "main_script": ["第一点，我想跟您反馈一下...【语气放缓】"],
+        "branches": [{"if": "如果对方说需要再考虑", "reply": "我理解需要时间，您看方便给我一个大概的时间节点吗？【礼貌追问】"}],
+        "closing": "感谢您的时间。【微笑】",
+        "tips": ["选对方心情好的时候打", "准备好数据支撑"]
     }
 
-
-# ── HTML Template ──
+# ── HTML ──
 HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>📞 打电话话术教练</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    min-height: 100vh; color: #e2e8f0;
-  }
-  .container { max-width: 680px; margin: 0 auto; padding: 24px 20px; }
-  header { text-align: center; padding: 40px 0 32px; }
-  header h1 { font-size: 2rem; margin-bottom: 8px; }
-  header p { color: #94a3b8; font-size: 0.95rem; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);min-height:100vh;color:#e2e8f0}
+.container{max-width:720px;margin:0 auto;padding:24px 20px}
+header{text-align:center;padding:32px 0 24px}
+header h1{font-size:1.8rem;margin-bottom:6px}
+header p{color:#94a3b8;font-size:.9rem}
 
-  .scenes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 32px; }
-  .scene-btn {
-    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px; padding: 18px 14px; cursor: pointer; transition: all 0.2s;
-    text-align: left; color: #e2e8f0; font-size: 1rem;
-  }
-  .scene-btn:hover { background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.3); transform: translateY(-1px); }
-  .scene-btn.active { background: rgba(56,189,248,0.15); border-color: #38bdf8; }
-  .scene-btn .emoji { font-size: 1.5rem; display: block; margin-bottom: 6px; }
-  .scene-btn .goal { color: #94a3b8; font-size: 0.8rem; margin-top: 4px; }
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:24px;background:rgba(255,255,255,.04);border-radius:12px;padding:4px}
+.tab{flex:1;padding:10px;text-align:center;border-radius:10px;cursor:pointer;font-size:.9rem;color:#94a3b8;transition:all .2s;border:none;background:none}
+.tab:hover{background:rgba(255,255,255,.05);color:#e2e8f0}
+.tab.active{background:rgba(56,189,248,.2);color:#38bdf8;font-weight:600}
 
-  .generate-btn {
-    width: 100%; padding: 16px; border: none; border-radius: 12px;
-    background: linear-gradient(135deg, #38bdf8, #818cf8); color: #fff;
-    font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
-  }
-  .generate-btn:hover { opacity: 0.9; }
-  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Tab panels */
+.panel{display:none}
+.panel.active{display:block}
 
-  .loading { display:none; text-align:center; padding:40px; }
-  .loading.show { display:block; }
-  .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.1); border-top-color:#38bdf8; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* Scene cards */
+.scenes{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}
+.scene-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:16px 12px;cursor:pointer;transition:all .2s;text-align:left;color:#e2e8f0;font-size:.95rem}
+.scene-btn:hover{background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.3);transform:translateY(-1px)}
+.scene-btn.active{background:rgba(56,189,248,.15);border-color:#38bdf8}
+.scene-btn .emj{font-size:1.3rem;display:block;margin-bottom:4px}
+.scene-btn .goal{color:#94a3b8;font-size:.75rem;margin-top:2px}
 
-  .result { display:none; }
-  .result.show { display:block; }
+.btn{width:100%;padding:14px;border:none;border-radius:12px;cursor:pointer;font-size:1rem;font-weight:600;transition:opacity .2s}
+.btn:hover{opacity:.9}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,#38bdf8,#818cf8);color:#fff}
+.btn-outline{background:transparent;border:1px solid rgba(56,189,248,.3);color:#38bdf8}
 
-  .script-card {
-    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px; padding: 24px; margin-bottom: 16px;
-  }
-  .script-card h3 { font-size: 0.85rem; color: #38bdf8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
-  .script-line {
-    padding: 10px 14px; margin-bottom: 8px; border-radius: 8px;
-    background: rgba(255,255,255,0.03); line-height: 1.7; font-size: 0.95rem;
-  }
-  .script-line.hero { background: rgba(56,189,248,0.1); border-left: 3px solid #38bdf8; font-size: 1.05rem; }
-  .tone { color: #fbbf24; font-size: 0.8rem; margin-left: 4px; }
-  .branch-item {
-    padding: 12px 14px; margin-bottom: 10px; border-radius: 8px;
-    background: rgba(129,140,248,0.06); border: 1px solid rgba(129,140,248,0.15);
-  }
-  .branch-if { color: #f87171; font-size: 0.85rem; margin-bottom: 6px; }
-  .branch-reply { color: #e2e8f0; font-size: 0.95rem; line-height: 1.6; }
-  .tips-list { padding-left: 20px; }
-  .tips-list li { color: #94a3b8; margin-bottom: 6px; font-size: 0.9rem; line-height: 1.5; }
+.loading{display:none;text-align:center;padding:30px}
+.loading.show{display:block}
+.spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:#38bdf8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-  .footer { text-align: center; padding: 40px 0; color: #475569; font-size: 0.8rem; }
+.result{display:none}
+.result.show{display:block}
+
+.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:20px;margin-bottom:14px}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.card-header h3{font-size:.85rem;color:#38bdf8;text-transform:uppercase;letter-spacing:1px}
+.script-line{padding:10px 14px;margin-bottom:6px;border-radius:8px;background:rgba(255,255,255,.03);line-height:1.7;font-size:.9rem}
+.script-line.hero{background:rgba(56,189,248,.1);border-left:3px solid #38bdf8;font-size:1rem}
+.tone{color:#fbbf24;font-size:.78rem;margin-left:2px}
+.branch-item{padding:10px 14px;margin-bottom:8px;border-radius:8px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.15)}
+.branch-if{color:#f87171;font-size:.82rem;margin-bottom:4px}
+.branch-reply{color:#e2e8f0;font-size:.9rem;line-height:1.6}
+.tips-list{padding-left:18px}
+.tips-list li{color:#94a3b8;margin-bottom:4px;font-size:.85rem;line-height:1.5}
+
+.actions{display:flex;gap:8px;margin-top:14px}
+.actions .btn{font-size:.85rem;padding:10px}
+
+/* Community */
+.feed-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:18px;margin-bottom:12px}
+.feed-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.feed-scene{background:rgba(56,189,248,.15);color:#38bdf8;padding:2px 10px;border-radius:12px;font-size:.8rem}
+.feed-time{color:#64748b;font-size:.78rem}
+.feed-script{color:#e2e8f0;font-size:.9rem;line-height:1.6;margin-bottom:8px;white-space:pre-wrap}
+.feed-footer{display:flex;gap:16px;align-items:center}
+.feed-btn{background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.82rem;padding:4px 8px;border-radius:6px;transition:all .15s}
+.feed-btn:hover{background:rgba(255,255,255,.05);color:#e2e8f0}
+.feed-btn .num{color:#38bdf8;margin-left:3px}
+.feed-btn.replayed{color:#a78bfa}
+
+/* Story */
+.story-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:18px;margin-bottom:12px}
+.story-content{color:#e2e8f0;font-size:.92rem;line-height:1.7;margin-bottom:8px}
+.story-footer{display:flex;justify-content:space-between;align-items:center}
+.story-scene{color:#38bdf8;font-size:.78rem}
+.story-time{color:#64748b;font-size:.78rem}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#38bdf8;color:#fff;padding:10px 24px;border-radius:20px;font-size:.9rem;opacity:0;transition:opacity .3s;z-index:99}
+.toast.show{opacity:1}
+
+/* Share modal */
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.modal-box{background:#1e293b;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:480px;width:90%}
+.modal-box textarea{width:100%;height:120px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;color:#e2e8f0;font-size:.9rem;resize:vertical;font-family:inherit}
+.modal-box .actions{margin-top:14px}
+
+.empty-state{text-align:center;padding:40px 20px;color:#64748b}
+.empty-state .icon{font-size:3rem;margin-bottom:12px}
+
+.footer{text-align:center;padding:40px 0;color:#475569;font-size:.78rem}
 </style>
 </head>
 <body>
 <div class="container">
-  <header>
-    <h1>📞 打电话话术教练</h1>
-    <p>选一个场景，生成能直接念的剧本</p>
-  </header>
+<header><h1>📞 打电话话术教练</h1><p>选场景 · 出话术 · 分享社区</p></header>
 
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('generate')">⚡ 生成话术</button>
+  <button class="tab" onclick="switchTab('community')">🔥 话术广场</button>
+  <button class="tab" onclick="switchTab('stories')">💬 成功故事</button>
+</div>
+
+<!-- TAB 1: Generate -->
+<div class="panel active" id="panel-generate">
   <div class="scenes" id="scenes"></div>
-
-  <button class="generate-btn" id="generate" disabled>选场景后点此生成话术 ⚡</button>
-
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
-    <p style="color:#94a3b8">AI 正在写话术...</p>
-  </div>
-
+  <button class="btn btn-primary" id="generate" disabled>选场景后点此生成 ⚡</button>
+  <div class="loading" id="loading"><div class="spinner"></div><p style="color:#94a3b8">AI 正在写话术...</p></div>
   <div class="result" id="result"></div>
 </div>
+
+<!-- TAB 2: Community Script Wall -->
+<div class="panel" id="panel-community">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h3 style="color:#38bdf8;font-size:.95rem">🔥 热门话术</h3>
+    <button class="btn btn-outline" style="width:auto;padding:8px 16px" onclick="refreshFeed()">🔄 刷新</button>
+  </div>
+  <div id="feed"></div>
+</div>
+
+<!-- TAB 3: Success Stories -->
+<div class="panel" id="panel-stories">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h3 style="color:#38bdf8;font-size:.95rem">💬 匿名成功故事</h3>
+    <button class="btn btn-outline" style="width:auto;padding:8px 16px" onclick="showStoryModal()">✏️ 写故事</button>
+  </div>
+  <div id="story-feed"></div>
+</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Story modal -->
+<div class="modal" id="storyModal">
+  <div class="modal-box">
+    <h3 style="color:#38bdf8;margin-bottom:14px">✏️ 分享你的故事（匿名）</h3>
+    <textarea id="storyText" placeholder="比如：用了谈薪话术，涨了30%，匿了..."></textarea>
+    <div class="actions">
+      <button class="btn btn-outline" style="flex:1" onclick="closeStoryModal()">取消</button>
+      <button class="btn btn-primary" style="flex:1" onclick="postStory()">发布</button>
+    </div>
+  </div>
+</div>
+
 <div class="footer">AI Phone Call Coach · 话术仅供参考</div>
 
 <script>
 const SCENES = """ + json.dumps(SCENES) + r""";
 let selectedScene = null;
+let currentScript = null;
 
-// Render scene cards
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab:nth-child(${tab==='generate'?1:tab==='community'?2:3})`).classList.add('active');
+  document.getElementById('panel-'+tab).classList.add('active');
+  if (tab==='community') refreshFeed();
+  if (tab==='stories') refreshStories();
+}
+
+// ── Scene buttons ──
 const scenesEl = document.getElementById('scenes');
 Object.entries(SCENES).forEach(([key, scene]) => {
   const btn = document.createElement('button');
   btn.className = 'scene-btn';
-  btn.innerHTML = `<span class="emoji">${scene.emoji}</span>${scene.name}<div class="goal">${scene.goal}</div>`;
+  btn.innerHTML = `<span class="emj">${scene.name.slice(0,2)}</span>${scene.name.slice(2)}<div class="goal">${scene.goal}</div>`;
   btn.onclick = () => {
     document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedScene = key;
+    btn.classList.add('active'); selectedScene = key;
     document.getElementById('generate').disabled = false;
-    document.getElementById('generate').textContent = `生成「${scene.name.replace(/[🎯💡]/g,'')}」话术 ⚡`;
+    document.getElementById('generate').textContent = `生成「${scene.name.replace(/[^\u4e00-\u9fa5]/g,'')}」话术 ⚡`;
   };
   scenesEl.appendChild(btn);
 });
 
-// Generate button
+// ── Generate ──
 document.getElementById('generate').onclick = async () => {
   if (!selectedScene) return;
   document.getElementById('loading').classList.add('show');
   document.getElementById('result').classList.remove('show');
   document.getElementById('generate').disabled = true;
-
   try {
-    const res = await fetch('/api/generate?scene=' + selectedScene);
-    const data = await res.json();
-
-    if (data.error) {
-      document.getElementById('result').innerHTML = `<div class="script-card"><p style="color:#f87171">${data.error}</p></div>`;
+    const res = await fetch('/api/generate?scene='+selectedScene);
+    currentScript = await res.json();
+    if (currentScript.error) {
+      document.getElementById('result').innerHTML = `<div class="card"><p style="color:#f87171">${currentScript.error}</p></div>`;
     } else {
-      renderScript(data);
+      renderScript(currentScript);
     }
   } catch(e) {
-    document.getElementById('result').innerHTML = `<div class="script-card"><p style="color:#f87171">生成失败，请重试</p></div>`;
+    document.getElementById('result').innerHTML = `<div class="card"><p style="color:#f87171">生成失败，请重试</p></div>`;
   }
-
   document.getElementById('loading').classList.remove('show');
   document.getElementById('result').classList.add('show');
   document.getElementById('generate').disabled = false;
@@ -280,95 +300,182 @@ document.getElementById('generate').onclick = async () => {
 
 function renderScript(data) {
   const lines = Array.isArray(data.main_script) ? data.main_script : [data.main_script];
-
   let html = '';
-
-  // Opening
-  if (data.opening) {
-    html += `<div class="script-card">
-      <h3>🎤 开场白</h3>
-      <div class="script-line hero">${formatTone(data.opening)}</div>
-    </div>`;
-  }
-
-  // Main script
-  html += `<div class="script-card">
-    <h3>📜 主体话术</h3>
-    ${lines.map(l => `<div class="script-line">${formatTone(l)}</div>`).join('')}
-  </div>`;
-
-  // Branches
-  if (data.branches && data.branches.length) {
-    html += `<div class="script-card">
-      <h3>🔀 如果对方说...</h3>
-      ${data.branches.map(b => `
-        <div class="branch-item">
-          <div class="branch-if">👉 ${b.if}</div>
-          <div class="branch-reply">💬 ${formatTone(b.reply)}</div>
-        </div>`).join('')}
-    </div>`;
-  }
-
-  // Closing
-  if (data.closing) {
-    html += `<div class="script-card">
-      <h3>👋 结尾</h3>
-      <div class="script-line">${formatTone(data.closing)}</div>
-    </div>`;
-  }
-
-  // Tips
-  if (data.tips && data.tips.length) {
-    html += `<div class="script-card">
-      <h3>💡 温馨提示</h3>
-      <ol class="tips-list">${data.tips.map(t => `<li>${t}</li>`).join('')}</ol>
-    </div>`;
-  }
-
+  if (data.opening) html += `<div class="card"><div class="card-header"><h3>🎤 开场白</h3></div><div class="script-line hero">${fmt(data.opening)}</div></div>`;
+  html += `<div class="card"><div class="card-header"><h3>📜 主体话术</h3></div>${lines.map(l=>`<div class="script-line">${fmt(l)}</div>`).join('')}</div>`;
+  if (data.branches&&data.branches.length) html += `<div class="card"><div class="card-header"><h3>🔀 如果对方说...</h3></div>${data.branches.map(b=>`<div class="branch-item"><div class="branch-if">👉 ${b.if}</div><div class="branch-reply">💬 ${fmt(b.reply)}</div></div>`).join('')}</div>`;
+  if (data.closing) html += `<div class="card"><div class="card-header"><h3>👋 结尾</h3></div><div class="script-line">${fmt(data.closing)}</div></div>`;
+  if (data.tips&&data.tips.length) html += `<div class="card"><div class="card-header"><h3>💡 温馨提示</h3></div><ol class="tips-list">${data.tips.map(t=>`<li>${t}</li>`).join('')}</ol></div>`;
+  html += `<div class="actions"><button class="btn btn-outline" style="flex:1" onclick="shareScript()">📤 分享到广场</button><button class="btn btn-primary" style="flex:1" onclick="regenerate()">🔄 换一版</button></div>`;
   document.getElementById('result').innerHTML = html;
 }
 
-function formatTone(text) {
-  // Replace 【tone】 with styled spans
-  return text.replace(/【([^】]+)】/g, '<span class="tone">【$1】</span>');
+async function regenerate() {
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('result').classList.remove('show');
+  try {
+    const res = await fetch('/api/generate?scene='+selectedScene+'&retry=1');
+    currentScript = await res.json();
+    renderScript(currentScript);
+  } catch(e) { toast('重试失败'); }
+  document.getElementById('loading').classList.remove('show');
+  document.getElementById('result').classList.add('show');
+}
+
+async function shareScript() {
+  if (!currentScript || !selectedScene) return toast('先生成话术');
+  try {
+    const res = await fetch('/api/share', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({scene:selectedScene, script:currentScript})
+    });
+    if (res.ok) toast('✅ 已分享到广场！');
+    else toast('分享失败');
+  } catch(e) { toast('网络错误'); }
+}
+
+function fmt(text) { return text.replace(/【([^】]+)】/g, '<span class="tone">【$1】</span>'); }
+
+// ── Community Feed ──
+async function refreshFeed() {
+  const feed = document.getElementById('feed');
+  feed.innerHTML = '<div class="loading show"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch('/api/community');
+    const data = await res.json();
+    feed.innerHTML = '';
+    const items = (data.scripts||[]).sort((a,b)=>b.votes-a.votes).slice(0,20);
+    if (!items.length) {feed.innerHTML='<div class="empty-state"><div class="icon">📭</div><p>还没有人分享话术</p></div>';return;}
+    items.forEach(item => {
+      feed.innerHTML += `
+        <div class="feed-item">
+          <div class="feed-header"><span class="feed-scene">${SCENES[item.scene]?.name||item.scene}</span><span class="feed-time">${timeAgo(item.time)}</span></div>
+          <div class="feed-script">${item.preview}</div>
+          <div class="feed-footer">
+            <button class="feed-btn" onclick="voteScript('${item.id}')">🔼 <span class="num">${item.votes}</span></button>
+            <button class="feed-btn ${item.replayed?'replayed':''}" onclick="replayScript('${item.id}')">📢 转播 <span class="num">${item.replays||0}</span></button>
+          </div>
+        </div>`;
+    });
+  } catch(e) { feed.innerHTML='<div class="empty-state"><p>加载失败</p></div>'; }
+}
+
+async function voteScript(id) {
+  await fetch('/api/vote', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+  refreshFeed();
+}
+
+async function replayScript(id) {
+  await fetch('/api/replay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+  toast('📢 已转播');
+  refreshFeed();
+}
+
+// ── Stories ──
+async function refreshStories() {
+  const feed = document.getElementById('story-feed');
+  feed.innerHTML = '<div class="loading show"><div class="spinner"></div></div>';
+  try {
+    const res = await fetch('/api/community');
+    const data = await res.json();
+    feed.innerHTML = '';
+    const stories = (data.stories||[]).sort((a,b)=>b.time-a.time).slice(0,30);
+    if (!stories.length) {feed.innerHTML='<div class="empty-state"><div class="icon">💬</div><p>还没有成功故事，来写第一个！</p></div>';return;}
+    stories.forEach(s => {
+      feed.innerHTML += `<div class="story-item"><div class="story-content">${s.text}</div><div class="story-footer"><span class="story-scene">🗣️ 匿名网友</span><span class="story-time">${timeAgo(s.time)}</span></div></div>`;
+    });
+  } catch(e) { feed.innerHTML='<div class="empty-state"><p>加载失败</p></div>'; }
+}
+
+function showStoryModal() { document.getElementById('storyModal').classList.add('show'); }
+function closeStoryModal() { document.getElementById('storyModal').classList.remove('show'); document.getElementById('storyText').value=''; }
+
+async function postStory() {
+  const text = document.getElementById('storyText').value.trim();
+  if (!text) return toast('写点什么吧');
+  await fetch('/api/story', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  closeStoryModal();
+  toast('✅ 已发布（匿名）');
+  refreshStories();
+}
+
+// ── Utils ──
+function timeAgo(ts) {
+  const diff = Math.floor((Date.now()/1000) - ts);
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return Math.floor(diff/60)+'分钟前';
+  if (diff < 86400) return Math.floor(diff/3600)+'小时前';
+  return Math.floor(diff/86400)+'天前';
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
 }
 </script>
 </body>
 </html>"""
 
-
+# ── Server ──
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        parsed = urlparse(self.path)
-
-        if parsed.path == "/" or parsed.path == "/index.html":
-            self._serve_html()
-        elif parsed.path == "/api/generate":
-            self._api_generate(parsed)
+        p = urlparse(self.path)
+        if p.path in ["/", "/index.html"]:
+            self._html(HTML)
+        elif p.path == "/api/generate":
+            params = parse_qs(p.query)
+            scene = params.get("scene", [None])[0]
+            if not scene or scene not in SCENES:
+                self._json({"error": "请选择场景"})
+                return
+            data = generate_script(scene)
+            self._json(data)
+        elif p.path == "/api/community":
+            self._json(load_community())
         else:
             self.send_error(404)
 
-    def _serve_html(self):
+    def do_POST(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = json.loads(self.rfile.read(length)) if length > 0 else {}
+        data = load_community()
+
+        p = urlparse(self.path)
+        if p.path == "/api/share":
+            sid = str(uuid.uuid4())[:8]
+            script = body.get("script", {})
+            scene = body.get("scene", "")
+            preview = (script.get("opening", "") + " " + " ".join(script.get("main_script", [])))[:120]
+            data["scripts"].append({
+                "id": sid, "scene": scene, "preview": preview,
+                "votes": 0, "replays": 0, "time": time.time()
+            })
+            save_community(data)
+            self._json({"ok": True, "id": sid})
+        elif p.path == "/api/vote":
+            for s in data["scripts"]:
+                if s["id"] == body.get("id"):
+                    s["votes"] = s.get("votes", 0) + 1
+            save_community(data)
+            self._json({"ok": True})
+        elif p.path == "/api/replay":
+            for s in data["scripts"]:
+                if s["id"] == body.get("id"):
+                    s["replays"] = s.get("replays", 0) + 1
+            save_community(data)
+            self._json({"ok": True})
+        elif p.path == "/api/story":
+            data["stories"].append({"text": body.get("text", ""), "time": time.time()})
+            save_community(data)
+            self._json({"ok": True})
+        else:
+            self.send_error(404)
+
+    def _html(self, content):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(HTML.encode("utf-8"))
-
-    def _api_generate(self, parsed):
-        params = parse_qs(parsed.query)
-        scene = params.get("scene", [None])[0]
-
-        if not scene or scene not in SCENES:
-            self._json({"error": "请选择一个场景"})
-            return
-
-        print(f"Generating script for: {scene}")
-        data = generate_script(scene)
-
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        self.wfile.write(content.encode("utf-8"))
 
     def _json(self, data):
         self.send_response(200)
@@ -382,8 +489,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = 8765
-    print(f"\n📞 打电话话术教练启动！")
-    print(f"   浏览器打开 → http://localhost:{port}\n")
+    print(f"\n📞 打电话话术教练 v2 启动！")
+    print(f"   浏览器打开 → http://localhost:{port}")
+    print(f"   社区数据: {DATA_FILE}\n")
     server = HTTPServer(("0.0.0.0", port), Handler)
     try:
         server.serve_forever()
