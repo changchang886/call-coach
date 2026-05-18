@@ -297,9 +297,15 @@ header p{color:#94a3b8;font-size:.9rem}
 <!-- TAB 1: Generate -->
 <div class="panel active" id="panel-generate">
   <div class="scenes" id="scenes"></div>
-  <button class="btn btn-primary" id="generate" disabled>选场景后点此生成 ⚡</button>
+  <div id="gen-actions" style="display:none;margin-bottom:16px">
+    <button class="btn btn-primary" onclick="startTraining()" style="margin-bottom:8px">🎯 实战训练 — 先练再拿剧本（推荐）</button>
+    <button class="btn btn-outline" onclick="generateDirect()">⚡ 直接生成 — 跳过练习</button>
+    <p style="color:#64748b;font-size:.78rem;text-align:center;margin-top:6px">实战训练：AI 扮演对方，练完后解锁完整话术+评分</p>
+  </div>
   <div class="loading" id="loading"><div class="spinner"></div><p style="color:#94a3b8">AI 正在写话术...</p></div>
   <div class="result" id="result"></div>
+  <!-- Training inline -->
+  <div id="training-chat" style="display:none;margin-top:14px"></div>
 </div>
 
 <!-- TAB 2: Community Script Wall -->
@@ -388,35 +394,149 @@ Object.entries(SCENES).forEach(([key, scene]) => {
   btn.onclick = () => {
     document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active'); selectedScene = key;
-    document.getElementById('generate').disabled = false;
-    document.getElementById('generate').textContent = `生成「${scene.name.replace(/[^\u4e00-\u9fa5]/g,'')}」话术 ⚡`;
+    document.getElementById('gen-actions').style.display='block';
+    document.getElementById('result').classList.remove('show');
+    document.getElementById('result').innerHTML='';
+    document.getElementById('training-chat').style.display='none';
+    document.getElementById('training-chat').innerHTML='';
   };
   scenesEl.appendChild(btn);
 });
 
 // ── Generate ──
-document.getElementById('generate').onclick = async () => {
+// ── Direct generate (skip training) ──
+async function generateDirect() {
   if (!selectedScene) return;
+  document.getElementById('gen-actions').style.display='none';
   document.getElementById('loading').classList.add('show');
   document.getElementById('result').classList.remove('show');
-  document.getElementById('generate').disabled = true;
   try {
     const res = await fetch('/api/generate?scene='+selectedScene);
     currentScript = await res.json();
     if (currentScript.error) {
       document.getElementById('result').innerHTML = `<div class="card"><p style="color:#f87171">${currentScript.error}</p></div>`;
     } else {
-      renderScript(currentScript);
+      document.getElementById('result').innerHTML = renderScriptHTML(currentScript);
     }
   } catch(e) {
-    document.getElementById('result').innerHTML = `<div class="card"><p style="color:#f87171">生成失败，请重试</p></div>`;
+    document.getElementById('result').innerHTML = `<div class="card"><p style="color:#f87171">生成失败</p></div>`;
   }
   document.getElementById('loading').classList.remove('show');
   document.getElementById('result').classList.add('show');
-  document.getElementById('generate').disabled = false;
-};
+}
 
-function renderScript(data) {
+// ── Guided Training: practice first, unlock script ──
+let trainSession = null;
+let trainTurnCount = 0;
+const MAX_TRAIN_TURNS = 5;
+
+async function startTraining() {
+  if (!selectedScene) return;
+  document.getElementById('gen-actions').style.display='none';
+  document.getElementById('result').classList.remove('show');
+  const chat = document.getElementById('training-chat');
+  chat.style.display='block';
+  chat.innerHTML = '<div class="loading show"><div class="spinner"></div><p style="color:#94a3b8">接通中...</p></div>';
+
+  try {
+    const res = await fetch('/api/roleplay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'start',scene:selectedScene})});
+    const data = await res.json();
+    trainSession = data.session;
+    trainTurnCount = 0;
+    const persona = SCENES[selectedScene]?.persona||'对方';
+    chat.innerHTML = `
+      <div style="text-align:center;margin-bottom:12px">
+        <span style="background:rgba(56,189,248,.15);color:#38bdf8;padding:4px 12px;border-radius:12px;font-size:.8rem">🎯 实战训练 · ${persona}已接通</span>
+      </div>
+      <div id="train-msgs" style="max-height:350px;overflow-y:auto;margin-bottom:10px">
+        <div style="margin-bottom:8px">
+          <div style="color:#94a3b8;font-size:.7rem;margin-bottom:2px">✆ ${persona}</div>
+          <div style="background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.15);border-radius:8px;padding:10px 12px;color:#e2e8f0;font-size:.9rem;line-height:1.6">${data.message}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="flex:1;font-size:.85rem;padding:10px" onclick="endTraining()">📊 结束训练</button>
+        <input id="train-input" type="text" placeholder="说你的台词..." style="flex:2;padding:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e2e8f0;font-size:.85rem" onkeydown="if(event.key==='Enter')sendTrainTurn()">
+        <button class="btn btn-primary" style="width:auto;padding:10px 16px;font-size:.85rem" onclick="sendTrainTurn()">发送</button>
+      </div>`;
+    document.getElementById('train-input').focus();
+  } catch(e) { chat.innerHTML = '<p style="color:#f87171;text-align:center">连接失败</p>'; }
+}
+
+async function sendTrainTurn() {
+  const input = document.getElementById('train-input');
+  const msg = input.value.trim();
+  if (!msg || !trainSession) return;
+  input.value=''; input.disabled=true;
+  trainTurnCount++;
+
+  const msgs = document.getElementById('train-msgs');
+  const persona = SCENES[selectedScene]?.persona||'对方';
+  msgs.innerHTML += `<div style="margin-bottom:8px;text-align:right"><div style="color:#38bdf8;font-size:.7rem;margin-bottom:2px">你</div><div style="background:rgba(56,189,248,.08);border-radius:8px;padding:10px 12px;color:#e2e8f0;font-size:.9rem;text-align:left;display:inline-block">${msg}</div></div>`;
+  msgs.innerHTML += '<div class="loading show" style="padding:4px"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div></div>';
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const res = await fetch('/api/roleplay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'turn',session:trainSession,message:msg})});
+    const data = await res.json();
+    document.querySelector('#train-msgs .loading')?.remove();
+    if (data.error) { toast(data.error); input.disabled=false; return; }
+    msgs.innerHTML += `<div style="margin-bottom:8px"><div style="color:#94a3b8;font-size:.7rem;margin-bottom:2px">✆ ${persona}</div><div style="background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.15);border-radius:8px;padding:10px 12px;color:#e2e8f0;font-size:.9rem;line-height:1.6">${data.message}</div></div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Auto-prompt to end after a few turns
+    if (trainTurnCount >= MAX_TRAIN_TURNS) {
+      msgs.innerHTML += `<div style="text-align:center;margin-top:10px;padding:8px;background:rgba(251,191,36,.1);border-radius:8px;color:#fbbf24;font-size:.8rem">💡 已经练了${trainTurnCount}轮，点击「结束训练」查看评分和完整剧本</div>`;
+    }
+  } catch(e) { toast('发送失败'); }
+  input.disabled=false; input.focus();
+}
+
+async function endTraining() {
+  if (!trainSession) return;
+  const chat = document.getElementById('training-chat');
+  chat.innerHTML = '<div class="loading show"><div class="spinner"></div><p style="color:#94a3b8">AI 正在评估你的表现并生成优化剧本...</p></div>';
+
+  try {
+    // Get feedback
+    const fbRes = await fetch('/api/roleplay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'end',session:trainSession})});
+    const fb = await fbRes.json();
+    trainSession = null;
+
+    // Get the optimized script
+    const scriptRes = await fetch('/api/generate?scene='+selectedScene);
+    currentScript = await scriptRes.json();
+
+    chat.style.display='none';
+    const res = document.getElementById('result');
+    const scoreColor = fb.score>=8?'#4ade80':fb.score>=6?'#fbbf24':'#f87171';
+    const persona = SCENES[selectedScene]?.persona||'对方';
+
+    res.innerHTML = `
+      <div class="card" style="text-align:center">
+        <div style="font-size:3rem;color:${scoreColor};font-weight:bold">${fb.score}<span style="font-size:1rem;color:#94a3b8">/10</span></div>
+        <p style="color:#e2e8f0;margin-top:6px">${fb.summary||''}</p>
+      </div>
+      <div class="card">
+        <h3 style="color:#4ade80;font-size:.8rem">👍 做得好的</h3>
+        <ul class="tips-list">${(fb.good||[]).map(g=>`<li>${g}</li>`).join('')}</ul>
+      </div>
+      <div class="card">
+        <h3 style="color:#f87171;font-size:.8rem">🔧 可以改进</h3>
+        <ul class="tips-list">${(fb.improve||[]).map(i=>`<li>${i}</li>`).join('')}</ul>
+      </div>
+      <div style="text-align:center;padding:16px 0 8px">
+        <div style="color:#38bdf8;font-size:.9rem;margin-bottom:8px">🔓 完整话术剧本已解锁 ↓</div>
+      </div>
+      ${renderScriptHTML(currentScript)}
+    `;
+    res.classList.add('show');
+  } catch(e) {
+    chat.innerHTML = '<p style="color:#f87171;text-align:center">评估失败</p>';
+  }
+}
+
+function renderScriptHTML(data) {
   const lines = Array.isArray(data.main_script) ? data.main_script : [data.main_script];
   let html = '';
   if (data.opening) html += `<div class="card"><div class="card-header"><h3>🎤 开场白</h3></div><div class="script-line hero">${fmt(data.opening)}</div></div>`;
@@ -425,7 +545,7 @@ function renderScript(data) {
   if (data.closing) html += `<div class="card"><div class="card-header"><h3>👋 结尾</h3></div><div class="script-line">${fmt(data.closing)}</div></div>`;
   if (data.tips&&data.tips.length) html += `<div class="card"><div class="card-header"><h3>💡 温馨提示</h3></div><ol class="tips-list">${data.tips.map(t=>`<li>${t}</li>`).join('')}</ol></div>`;
   html += `<div class="actions"><button class="btn btn-outline" style="flex:1" onclick="shareScript()">📤 分享到广场</button><button class="btn btn-primary" style="flex:1" onclick="regenerate()">🔄 换一版</button></div>`;
-  document.getElementById('result').innerHTML = html;
+  return html;
 }
 
 async function regenerate() {
@@ -434,7 +554,7 @@ async function regenerate() {
   try {
     const res = await fetch('/api/generate?scene='+selectedScene+'&retry=1');
     currentScript = await res.json();
-    renderScript(currentScript);
+    document.getElementById('result').innerHTML = renderScriptHTML(currentScript);
   } catch(e) { toast('重试失败'); }
   document.getElementById('loading').classList.remove('show');
   document.getElementById('result').classList.add('show');
