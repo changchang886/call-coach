@@ -33,3 +33,20 @@ python server.py
 ## 技术栈
 
 Python · DeepSeek API · Vanilla JS · 零依赖前端
+
+### 微信小程序
+
+`/miniapp` 目录为完整微信小程序源码。
+
+**导入方式：**
+1. 下载[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)
+2. 打开工具 → 导入项目 → 选择 `miniapp/` 目录
+3. 修改 `project.config.json` 中的 `appid` 为你的 AppID
+4. 修改 `utils/api.js` 中的 `API_BASE` 为你的后端地址
+
+**页面结构：**
+- `pages/index` — 场景选择
+- `pages/training` — 实战训练 + 语音模式
+- `pages/result` — 评分 + 剧本解锁
+- `pages/community` — 话术广场 + 成功故事
+- `pages/coach` — 教练观看模式
