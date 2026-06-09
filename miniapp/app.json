@@ -1,32 +1,13 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/training/training",
-    "pages/result/result",
-    "pages/community/community",
-    "pages/coach/coach"
+    "pages/result/result"
   ],
   "window": {
     "navigationBarTitleText": "最强模拟",
     "navigationBarBackgroundColor": "#0f172a",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#0f172a"
-  },
-  "tabBar": {
-    "color": "#94a3b8",
-    "selectedColor": "#38bdf8",
-    "backgroundColor": "#1e293b",
-    "borderStyle": "white",
-    "list": [
-      { "pagePath": "pages/index/index", "text": "⚡训练" },
-      { "pagePath": "pages/community/community", "text": "🔥广场" },
-      { "pagePath": "pages/coach/coach", "text": "👀教练" }
-    ]
-  },
-  "permission": {
-    "scope.record": {
-      "desc": "用于录制通话并分析话术"
-    }
   },
   "sitemapLocation": "sitemap.json"
 }

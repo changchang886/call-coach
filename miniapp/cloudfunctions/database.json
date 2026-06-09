@@ -1,0 +1,11 @@
+{
+  "collections": [
+    {
+      "name": "sessions",
+      "description": "角色演练会话存储",
+      "indexes": [
+        { "field": "createdAt", "unique": false }
+      ]
+    }
+  ]
+}

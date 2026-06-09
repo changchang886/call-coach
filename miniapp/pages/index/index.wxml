@@ -1,40 +1,76 @@
 <!-- 最强模拟 · 首页 -->
 <view class="container">
-  <view class="header">
-    <text class="title">📞 最强模拟</text>
-    <text class="subtitle">选场景 · 练真话 · 拿剧本 · 播出去</text>
-  </view>
-
-  <!-- 场景选择 -->
-  <view class="scene-grid">
-    <view 
-      wx:for="{{scenes}}" wx:key="key"
-      class="scene-card {{selected === item.key ? 'active' : ''}}"
-      data-key="{{item.key}}"
-      bindtap="onSceneTap"
-    >
-      <text class="scene-emoji">{{item.emoji}}</text>
-      <text class="scene-name">{{item.name.slice(2)}}</text>
-      <text class="scene-goal">{{item.goal}}</text>
+  <view wx:if="{{!inChat}}" class="scene-view">
+    <view class="header">
+      <text class="title">📞 最强模拟</text>
+      <text class="subtitle">选场景，真人演练，沉浸式对话</text>
+    </view>
+    <view class="scene-grid">
+      <block wx:for="{{scenes}}" wx:key="key">
+        <view class="scene-card" bindtap="startChat" data-key="{{item.key}}">
+          <text class="scene-emoji">{{item.emoji}}</text>
+          <text class="scene-name">{{item.name}}</text>
+          <text class="scene-goal">{{item.goal}}</text>
+        </view>
+        <view class="scene-card demo-card" bindtap="startDemo" data-key="{{item.key}}" data-name="{{item.name}}">
+          <text class="scene-emoji">📺</text>
+          <text class="scene-name">对话示范</text>
+          <text class="scene-goal">看看高手怎么聊</text>
+        </view>
+      </block>
     </view>
   </view>
 
-  <!-- 操作按钮 -->
-  <view wx:if="{{showActions}}" class="actions">
-    <view class="action-hint">已选：{{actionLabel}}</view>
-    <button class="btn btn-primary" bindtap="startTraining">
-      🎯 实战训练 — 先练再拿剧本
-    </button>
-    <button class="btn btn-secondary" bindtap="generateDirect">
-      ⚡ 直接生成 — 跳过练习
-    </button>
-    <button class="btn btn-voice" bindtap="startVoiceReview">
-      🎙️ 语音复盘 — 录完分析
-    </button>
+  <view wx:if="{{inDemo}}" class="chat-view">
+    <view class="chat-header">
+      <text class="chat-scene">📺 对话示范 · {{demoSceneName}}</text>
+      <text class="chat-persona">自动模拟对话</text>
+    </view>
+    <scroll-view class="chat-area" scroll-y>
+      <view wx:if="{{demoLoading}}" class="init-msg">正在准备对话...</view>
+      <block wx:else>
+        <view wx:for="{{demoMessages}}" wx:key="index" class="msg-item">
+          <view class="{{item.speaker === '你' ? 'msg-user' : 'msg-bot'}}">
+            <text class="msg-label">{{item.speaker === '你' ? '🎯 你' : '✆ ' + item.speaker}}</text>
+            <view class="msg-bubble {{item.speaker === '你' ? 'msg-bubble-user' : 'msg-bubble-bot'}}">{{item.text}}</view>
+          </view>
+        </view>
+      </block>
+    </scroll-view>
+    <view class="input-area" style="text-align:center">
+      <button class="action-btn back-btn" bindtap="closeDemo">← 返回</button>
+      <button class="action-btn end-btn" bindtap="demoThenTry">🎯 我来试试</button>
+    </view>
   </view>
 
-  <!-- 空状态 -->
-  <view wx:if="{{!showActions}}" class="empty-hint">
-    <text>👆 选一个场景开始</text>
+  <view wx:if="{{inChat}}" class="chat-view">
+    <view class="chat-header">
+      <text class="chat-scene">{{sceneName}}</text>
+      <text class="chat-persona">✆ {{persona}} 已接通</text>
+    </view>
+
+    <scroll-view class="chat-area" scroll-y scroll-into-view="msg-{{messages.length - 1}}">
+      <view wx:if="{{initializing}}" class="init-msg">接通中...</view>
+      <block wx:else>
+        <view wx:for="{{messages}}" wx:key="index" id="msg-{{index}}" class="msg-item">
+          <view class="{{item.role === 'assistant' ? 'msg-bot' : 'msg-user'}}">
+            <text class="msg-label">{{item.role === 'assistant' ? '✆ ' + persona : '你'}}</text>
+            <view class="msg-bubble {{item.role === 'assistant' ? 'msg-bubble-bot' : 'msg-bubble-user'}}">{{item.content}}</view>
+          </view>
+        </view>
+      </block>
+    </scroll-view>
+
+    <view class="input-area">
+      <view class="input-row">
+        <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
+        <button class="send-btn" bindtap="sendMessage" disabled="{{!inputText || loading}}">发送</button>
+      </view>
+      <view class="chat-actions">
+        <button class="action-btn end-btn" bindtap="endChat">📊 结束对话，看话术</button>
+        <button class="action-btn skip-btn" bindtap="skipChat">⚡ 跳过，直接出话术</button>
+        <button class="action-btn back-btn" bindtap="goBack">← 返回选场景</button>
+      </view>
+    </view>
   </view>
 </view>

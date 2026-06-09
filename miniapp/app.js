@@ -1,15 +1,16 @@
 App({
   globalData: {
-    trainingResult: null,
-    apiBase: 'https://4fdb48b4809be5.lhr.life'
+    cloudEnv: 'cloudbase-d6gywfjz3008a9c0b'
   },
 
   onLaunch() {
     console.log('📞 最强模拟 启动')
-  },
-
-  // 保存训练结果（跨页面传递）
-  saveTrainingResult(result) {
-    this.globalData.trainingResult = result
+    if (wx.cloud) {
+      wx.cloud.init({
+        env: 'cloudbase-d6gywfjz3008a9c0b',
+        traceUser: true
+      })
+      this.globalData.cloudEnv = 'cloudbase-d6gywfjz3008a9c0b'
+    }
   }
 })

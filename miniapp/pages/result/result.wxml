@@ -1,14 +1,13 @@
 <!-- 结果页 -->
 <view class="container">
 
-  <!-- 评分卡片 -->
-  <view wx:if="{{mode === 'trained'}}" class="score-card">
+  <!-- 评分（仅训练模式） -->
+  <view wx:if="{{score !== null}}" class="score-card">
     <text class="score-num">{{score}}</text>
     <text class="score-max">/10</text>
     <text class="score-summary">{{summary}}</text>
   </view>
 
-  <!-- 反馈 -->
   <view wx:if="{{goodPoints.length}}" class="feedback-card">
     <text class="card-title good">👍 做得好的</text>
     <view wx:for="{{goodPoints}}" wx:key="*this" class="feedback-item">{{item}}</view>
@@ -18,20 +17,8 @@
     <view wx:for="{{improvePoints}}" wx:key="*this" class="feedback-item">{{item}}</view>
   </view>
 
-  <!-- 手机号 -->
-  <view wx:if="{{showPhone}}" class="phone-card">
-    <text class="phone-title">📱 保存你的训练记录</text>
-    <text class="phone-desc">微信一键授权，无需手动输入</text>
-    <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="getPhoneNumber">
-      微信授权手机号
-    </button>
-    <text class="phone-skip" bindtap="skipPhone">跳过 → 直接看剧本</text>
-  </view>
-
   <!-- 剧本 -->
-  <view wx:if="{{showScript && script}}" class="script-area">
-    <view class="unlock-banner">🔓 完整话术剧本已解锁</view>
-
+  <view wx:if="{{script}}" class="script-area">
     <view wx:if="{{script.opening}}" class="script-card">
       <text class="script-label">🎤 开场白</text>
       <view class="script-hero">{{script.opening}}</view>
@@ -59,10 +46,10 @@
       <text class="script-label">💡 温馨提示</text>
       <view wx:for="{{script.tips}}" wx:key="*this" class="script-line">{{index+1}}. {{item}}</view>
     </view>
+  </view>
 
-    <!-- 分享按钮 -->
-    <button class="share-btn-bottom" open-type="share">📤 分享给朋友</button>
-    <button class="retry-btn" bindtap="goHome">🔄 再练一次</button>
+  <view class="bottom-actions">
+    <button class="btn btn-primary" bindtap="goHome">🔄 再练一次</button>
   </view>
 
 </view>

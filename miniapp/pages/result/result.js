@@ -1,35 +1,40 @@
-const { api, SCENES } = require('../../utils/api')
+// 云函数调用封装
+function callCloud(name, data) {
+  return new Promise((resolve, reject) => {
+    wx.cloud.callFunction({
+      name: name,
+      data: data || {}
+    }).then(res => {
+      if (res.result && res.result.error) {
+        reject(new Error(res.result.error))
+      } else {
+        resolve(res.result)
+      }
+    }).catch(reject)
+  })
+}
 
 Page({
   data: {
     sceneKey: '',
     sceneName: '',
-    mode: 'trained', // trained | direct
-    score: 0,
+    score: null,
     summary: '',
     goodPoints: [],
     improvePoints: [],
-    script: null,
-    showPhone: true,
-    showScript: false,
-    phoneInput: ''
+    script: null
   },
 
   onLoad(options) {
     const app = getApp()
     const result = app.globalData?.trainingResult
-    const scene = SCENES[options.scene] || {}
 
-    this.setData({
-      sceneKey: options.scene,
-      sceneName: scene.name || '',
-      mode: options.mode || 'direct'
-    })
+    this.setData({ sceneKey: options.scene, sceneName: options.scene || '' })
 
     if (options.mode === 'trained' && result) {
       const fb = result.feedback || {}
       this.setData({
-        score: fb.score || 7,
+        score: fb.score ?? null,
         summary: fb.summary || '',
         goodPoints: fb.good || [],
         improvePoints: fb.improve || [],
@@ -42,37 +47,14 @@ Page({
 
   async loadScript() {
     try {
-      const script = await api('/api/generate?scene=' + this.data.sceneKey)
-      this.setData({ script, showPhone: true })
+      const script = await callCloud('generateScript', { scene: this.data.sceneKey })
+      this.setData({ script })
     } catch (e) {
       wx.showToast({ title: '生成失败', icon: 'none' })
     }
   },
 
-  // ── 手机号收集 ──
-  getPhoneNumber(e) {
-    if (e.detail.errMsg === 'getPhoneNumber:ok') {
-      wx.showToast({ title: '已保存', icon: 'success' })
-    }
-    this.revealScript()
-  },
-
-  skipPhone() {
-    this.revealScript()
-  },
-
-  revealScript() {
-    this.setData({ showPhone: false, showScript: true })
-  },
-
   goHome() {
-    wx.switchTab({ url: '/pages/index/index' })
-  },
-
-  onShareAppMessage() {
-    return {
-      title: `我在最强模拟练了「${this.data.sceneName.slice(2)}」，评分${this.data.score}/10`,
-      path: '/pages/index/index'
-    }
+    wx.redirectTo({ url: '/pages/index/index' })
   }
 })

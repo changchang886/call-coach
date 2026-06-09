@@ -950,6 +950,18 @@ function toast(msg) {
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
+        if p.path.startswith("/img/"):
+            import mimetypes
+            fp = Path(__file__).parent / p.path.lstrip("/")
+            if fp.exists():
+                m, _ = mimetypes.guess_type(str(fp))
+                self.send_response(200)
+                self.send_header("Content-Type", m or "application/octet-stream")
+                self.send_header("Content-Length", fp.stat().st_size)
+                self.end_headers()
+                with open(fp, "rb") as f:
+                    self.wfile.write(f.read())
+                return
         if p.path.startswith("/login-qr.png"):
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
