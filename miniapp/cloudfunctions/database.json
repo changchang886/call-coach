@@ -1,6 +1,11 @@
 {
   "collections": [
     {
+      "name": "config",
+      "description": "全局配置（API Key等）",
+      "indexes": []
+    },
+    {
       "name": "sessions",
       "description": "角色演练会话存储",
       "indexes": [

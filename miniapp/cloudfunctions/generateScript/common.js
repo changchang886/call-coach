@@ -1,4 +1,4 @@
-// 云函数本地共享代码（自包含，不跨目录 require）
+// 云函数共享代码（自包含）
 const SCENES = {
   salary:   { emoji: '💰', name: '💰 谈薪资',   goal: '和领导谈加薪/谈期望薪资', persona: '领导/HR',   vibe: '自信而不冒犯' },
   resign:   { emoji: '🚪', name: '🚪 提离职',   goal: '体面地提出离职',         persona: '领导',       vibe: '坚定但不敌对' },
@@ -10,24 +10,43 @@ const SCENES = {
 
 function getScene(key) { return SCENES[key] || null }
 
-// AI 客户端
-const OPENAI_API_KEY = process.env.DEEPSEEK_API_KEY || ''
-const OPENAI_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
-const OPENAI_MODEL    = process.env.DEEPSEEK_MODEL    || 'deepseek-chat'
+// ─── AI 配置：从云数据库 config 集合读取 ───
+let _configCache = null
+
+async function getConfig() {
+  if (_configCache) return _configCache
+  try {
+    const cloud = require('wx-server-sdk')
+    cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+    const db = cloud.database()
+    const res = await db.collection('config').doc('ai').get()
+    _configCache = res.data || {}
+  } catch (e) {
+    _configCache = {}
+    console.warn('请在云数据库中创建 config 集合并添加文档 _id="ai"：', e.message)
+  }
+  return _configCache
+}
 
 let _openai = null
-function getOpenAI() {
+async function getOpenAI() {
   if (!_openai) {
+    const cfg = await getConfig()
+    if (!cfg.apiKey) throw new Error('未配置 API Key：请在云数据库 config 集合添加 ai 文档')
     const OpenAI = require('openai')
-    _openai = new OpenAI({ apiKey: OPENAI_API_KEY, baseURL: OPENAI_BASE_URL })
+    _openai = new OpenAI({
+      apiKey: cfg.apiKey,
+      baseURL: cfg.baseURL || 'https://api.deepseek.com'
+    })
   }
   return _openai
 }
 
 async function aiChat(messages, opts = {}) {
-  const ai = getOpenAI()
+  const cfg = await getConfig()
+  const ai = await getOpenAI()
   const resp = await ai.chat.completions.create({
-    model: OPENAI_MODEL,
+    model: cfg.model || 'deepseek-chat',
     messages,
     max_tokens: opts.max_tokens || 400,
     temperature: opts.temperature ?? 0.7,
