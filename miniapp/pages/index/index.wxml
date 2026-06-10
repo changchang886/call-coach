@@ -12,34 +12,7 @@
           <text class="scene-name">{{item.name}}</text>
           <text class="scene-goal">{{item.goal}}</text>
         </view>
-        <view class="scene-card demo-card" bindtap="startDemo" data-key="{{item.key}}" data-name="{{item.name}}">
-          <text class="scene-emoji">📺</text>
-          <text class="scene-name">对话示范</text>
-          <text class="scene-goal">看看高手怎么聊</text>
-        </view>
       </block>
-    </view>
-  </view>
-
-  <view wx:if="{{inDemo}}" class="chat-view">
-    <view class="chat-header">
-      <text class="chat-scene">📺 对话示范 · {{demoSceneName}}</text>
-      <text class="chat-persona">自动模拟对话</text>
-    </view>
-    <scroll-view class="chat-area" scroll-y>
-      <view wx:if="{{demoLoading}}" class="init-msg">正在准备对话...</view>
-      <block wx:else>
-        <view wx:for="{{demoMessages}}" wx:key="index" class="msg-item">
-          <view class="{{item.speaker === '你' ? 'msg-user' : 'msg-bot'}}">
-            <text class="msg-label">{{item.speaker === '你' ? '🎯 你' : '✆ ' + item.speaker}}</text>
-            <view class="msg-bubble {{item.speaker === '你' ? 'msg-bubble-user' : 'msg-bubble-bot'}}">{{item.text}}</view>
-          </view>
-        </view>
-      </block>
-    </scroll-view>
-    <view class="input-area" style="text-align:center">
-      <button class="action-btn back-btn" bindtap="closeDemo">← 返回</button>
-      <button class="action-btn end-btn" bindtap="demoThenTry">🎯 我来试试</button>
     </view>
   </view>
 

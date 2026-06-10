@@ -9,6 +9,7 @@ Page({
     scenes: [],
     inChat: false,
     initializing: false,
+    loading: false,
     sceneKey: '',
     sceneName: '',
     sceneGoal: '',
@@ -61,9 +62,9 @@ Page({
 
   sendMessage() {
     const text = this.data.inputText.trim()
-    if (!text || !this.rpSession) return
+    if (!text || !this.rpSession || this.data.loading) return
     const msgs = [...this.data.messages, { role: 'user', content: text }]
-    this.setData({ messages: msgs, inputText: '' })
+    this.setData({ messages: msgs, inputText: '', loading: true })
 
     wx.cloud.callFunction({
       name: 'roleplayTurn',
@@ -72,13 +73,16 @@ Page({
       const data = res.result || {}
       if (data.error) {
         wx.showToast({ title: data.error, icon: 'none' })
+        this.setData({ loading: false })
         return
       }
       this.setData({
-        messages: [...this.data.messages, { role: 'assistant', content: data.message }]
+        messages: [...this.data.messages, { role: 'assistant', content: data.message }],
+        loading: false
       })
     }).catch(() => {
       wx.showToast({ title: '发送失败，请重试', icon: 'none' })
+      this.setData({ loading: false })
     })
   },
 

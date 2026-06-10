@@ -9,8 +9,6 @@
 .scene-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; }
 .scene-card { background: rgba(255,255,255,0.05); border: 2rpx solid rgba(255,255,255,0.08); border-radius: 20rpx; padding: 32rpx 24rpx; text-align: center; }
 .scene-card:active { transform: scale(0.97); background: rgba(56,189,248,0.12); border-color: #38bdf8; }
-.demo-card { background: rgba(168,85,247,0.06); border-color: rgba(168,85,247,0.15); }
-.demo-card:active { background: rgba(168,85,247,0.15); border-color: #a855f7; }
 .scene-emoji { font-size: 40rpx; display: block; margin-bottom: 8rpx; }
 .scene-name { font-size: 30rpx; color: #e2e8f0; display: block; margin-bottom: 6rpx; }
 .scene-goal { font-size: 22rpx; color: #64748b; display: block; }
