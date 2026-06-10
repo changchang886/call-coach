@@ -1,18 +1,7 @@
-// 云函数调用封装
-function callCloud(name, data) {
-  return new Promise((resolve, reject) => {
-    wx.cloud.callFunction({
-      name: name,
-      data: data || {}
-    }).then(res => {
-      if (res.result && res.result.error) {
-        reject(new Error(res.result.error))
-      } else {
-        resolve(res.result)
-      }
-    }).catch(reject)
-  })
-}
+/**
+ * 结果页（重构版）
+ */
+const { callCloud } = require('../../utils/api')
 
 Page({
   data: {
@@ -22,13 +11,12 @@ Page({
     summary: '',
     goodPoints: [],
     improvePoints: [],
-    script: null
+    script: null,
   },
 
   onLoad(options) {
     const app = getApp()
     const result = app.globalData?.trainingResult
-
     this.setData({ sceneKey: options.scene, sceneName: options.scene || '' })
 
     if (options.mode === 'trained' && result) {
@@ -38,7 +26,7 @@ Page({
         summary: fb.summary || '',
         goodPoints: fb.good || [],
         improvePoints: fb.improve || [],
-        script: result.script
+        script: result.script,
       })
     } else {
       this.loadScript()
@@ -56,5 +44,5 @@ Page({
 
   goHome() {
     wx.redirectTo({ url: '/pages/index/index' })
-  }
+  },
 })

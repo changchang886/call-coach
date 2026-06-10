@@ -1,5 +1,8 @@
-// 最强模拟 · 首页逻辑
-// v3: 修复所有函数绑定 + 补充 demo/skip 功能
+/**
+ * 最强模拟 · 首页（重构版）
+ * 支持：微信原生 AI 直连 / 云函数 fallback
+ */
+const { getSceneList } = require('../../config/scenes')
 
 Page({
   data: {
@@ -13,47 +16,17 @@ Page({
     messages: [],
     inputText: '',
     loadingText: '',
-    inDemo: false,
-    demoSceneName: '',
-    demoSceneKey: '',
-    demoLoading: false,
-    demoMessages: []
   },
 
   onLoad() {
-    this.loadScenes()
-  },
-
-  loadScenes() {
-    this.setData({ loadingText: '加载场景...' })
-    wx.cloud.callFunction({
-      name: 'getScenes',
-      data: {}
-    }).then(res => {
-      const data = res.result || {}
-      const items = []
-      const scenes = data.scenes || {}
-      for (const key in scenes) {
-        const s = scenes[key]
-        items.push({
-          key: key,
-          emoji: s.emoji || '📞',
-          name: s.name,
-          goal: s.goal,
-          persona: s.persona || s.name || '对方'
-        })
-      }
-      this.setData({ scenes: items, loadingText: '' })
-    }).catch(err => {
-      console.error('Failed to load scenes:', err)
-      wx.showToast({ title: '加载失败，请检查网络', icon: 'none' })
-    })
+    this.setData({ scenes: getSceneList() })
   },
 
   startChat(e) {
     const key = e.currentTarget.dataset.key
     const scene = this.data.scenes.find(s => s.key === key)
     if (!scene) return
+
     this.setData({
       inChat: true, initializing: true,
       sceneKey: key, sceneName: scene.name, sceneGoal: scene.goal,
@@ -73,8 +46,7 @@ Page({
       }
       this.rpSession = data.session
       this.setData({
-        initializing: false,
-        loadingText: '',
+        initializing: false, loadingText: '',
         messages: [{ role: 'assistant', content: data.message }]
       })
     }).catch(() => {
@@ -113,6 +85,7 @@ Page({
   endChat() {
     if (!this.rpSession) return
     this.setData({ loadingText: '评分中...' })
+
     const fbP = wx.cloud.callFunction({ name: 'roleplayEnd', data: { session: this.rpSession } })
     const scriptP = wx.cloud.callFunction({ name: 'generateScript', data: { scene: this.data.sceneKey } })
 
@@ -156,56 +129,4 @@ Page({
   goBack() {
     this.setData({ inChat: false, messages: [], inputText: '', loadingText: '' })
   },
-
-  startDemo(e) {
-    const key = e.currentTarget.dataset.key
-    const scene = this.data.scenes.find(s => s.key === key)
-    if (!scene) return
-    this.setData({
-      inDemo: true, demoLoading: true,
-      demoSceneKey: key, demoSceneName: scene.name,
-      demoMessages: []
-    })
-
-    wx.cloud.callFunction({
-      name: 'generateScript',
-      data: { scene: key }
-    }).then(res => {
-      const script = res.result || {}
-      const persona = scene.persona || '对方'
-      const msgs = []
-      if (script.opening) {
-        msgs.push({ speaker: persona, text: script.opening })
-      }
-      if (script.main_script && script.main_script.length > 0) {
-        script.main_script.forEach(function(line, i) {
-          msgs.push({ speaker: '你', text: line })
-          const br = script.branches && script.branches[i]
-          if (br) {
-            msgs.push({ speaker: persona, text: br.reply || br.if || '...' })
-          }
-        })
-      }
-      if (script.closing) {
-        msgs.push({ speaker: '你', text: script.closing })
-      }
-      this.setData({ demoMessages: msgs, demoLoading: false })
-    }).catch(() => {
-      wx.showToast({ title: '加载失败', icon: 'none' })
-      this.setData({ inDemo: false })
-    })
-  },
-
-  closeDemo() {
-    this.setData({ inDemo: false, demoMessages: [] })
-  },
-
-  demoThenTry() {
-    const key = this.data.demoSceneKey
-    const scene = this.data.scenes.find(s => s.key === key)
-    this.setData({ inDemo: false })
-    if (scene) {
-      this.startChat({ currentTarget: { dataset: { key: key } } })
-    }
-  }
 })
