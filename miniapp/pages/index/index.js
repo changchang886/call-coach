@@ -50,7 +50,6 @@ Page({
         })
       })
   },
-  },
 
   startChat(e) {
     const key = e.currentTarget.dataset.key
