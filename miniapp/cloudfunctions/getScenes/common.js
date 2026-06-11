@@ -10,21 +10,38 @@ const SCENES = {
 
 function getScene(key) { return SCENES[key] || null }
 
-// ─── AI 配置：从云数据库 config 集合读取 ───
+// ─── AI 配置：优先数据库，兜底硬编码 ───
+const FALLBACK_KEY  = 'sk-98dc6f4f0a0f4f819c3575546396f86c'
+const FALLBACK_URL  = 'https://api.deepseek.com'
+const FALLBACK_MODEL = 'deepseek-chat'
+
 let _configCache = null
+let _configSource = null  // 'db' | 'fallback'
 
 async function getConfig() {
-  if (_configCache) return _configCache
+  if (_configCache && _configCache.apiKey) return _configCache
+
+  // 尝试从数据库读取
   try {
     const cloud = require('wx-server-sdk')
     cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
     const db = cloud.database()
     const res = await db.collection('config').doc('ai').get()
-    _configCache = res.data || {}
+    if (res.data && res.data.apiKey) {
+      _configCache = res.data
+      _configSource = 'db'
+      console.log('✅ AI Key 来源：云数据库 config/ai')
+      return _configCache
+    }
+    console.warn('⚠️ config/ai 文档缺少 apiKey 字段')
   } catch (e) {
-    _configCache = {}
-    console.warn('请在云数据库中创建 config 集合并添加文档 _id="ai"：', e.message)
+    console.warn('⚠️ 数据库读取失败，使用兜底 Key:', e.message)
   }
+
+  // 兜底：硬编码
+  _configCache = { apiKey: FALLBACK_KEY, baseURL: FALLBACK_URL, model: FALLBACK_MODEL }
+  _configSource = 'fallback'
+  console.log('⚡ AI Key 来源：硬编码兜底')
   return _configCache
 }
 
@@ -32,12 +49,12 @@ let _openai = null
 async function getOpenAI() {
   if (!_openai) {
     const cfg = await getConfig()
-    if (!cfg.apiKey) throw new Error('未配置 API Key：请在云数据库 config 集合添加 ai 文档')
     const OpenAI = require('openai')
     _openai = new OpenAI({
       apiKey: cfg.apiKey,
-      baseURL: cfg.baseURL || 'https://api.deepseek.com'
+      baseURL: cfg.baseURL || FALLBACK_URL
     })
+    console.log('🔗 OpenAI 客户端已初始化, 来源:', _configSource)
   }
   return _openai
 }
@@ -45,8 +62,9 @@ async function getOpenAI() {
 async function aiChat(messages, opts = {}) {
   const cfg = await getConfig()
   const ai = await getOpenAI()
+  console.log('📡 调用 AI, model:', cfg.model || FALLBACK_MODEL)
   const resp = await ai.chat.completions.create({
-    model: cfg.model || 'deepseek-chat',
+    model: cfg.model || FALLBACK_MODEL,
     messages,
     max_tokens: opts.max_tokens || 400,
     temperature: opts.temperature ?? 0.7,
