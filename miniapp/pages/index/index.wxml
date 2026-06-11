@@ -46,7 +46,7 @@
       </view>
       <view class="input-row">
         <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
-        <view class="mic-hold-btn {{recording ? 'mic-hold-active' : ''}}" bindtouchstart="startRecord" bindtouchend="stopRecord" bindtouchcancel="stopRecord">🎤</view>
+        <button class="mic-hold-btn {{recording ? 'mic-hold-active' : ''}}" catchtouchstart="startRecord" catchtouchend="stopRecord" catchtouchcancel="stopRecord">🎤</button>
         <view class="send-btn {{(!inputText || loading) ? 'send-disabled' : ''}}" bindtap="sendMessage">发送</view>
       </view>
       <view class="chat-actions">
