@@ -89,18 +89,21 @@ Page({
       wx.showToast({ title: '请先开始对话', icon: 'none' })
       return
     }
-    wx.showToast({ title: '评分中...', icon: 'loading', duration: 10000 })
+    wx.showToast({ title: '评分中...', icon: 'loading', duration: 15000 })
     this.setData({ loadingText: '评分中...' })
 
+    const safeCall = (name, data) =>
+      wx.cloud.callFunction({ name, data }).then(r => r.result).catch(err => {
+        console.log(name + ' failed:', err)
+        return { _error: err.message || '调用失败' }
+      })
+
     Promise.all([
-      wx.cloud.callFunction({ name: 'roleplayEnd', data: { history: this.rpHistory, scene: this.data.sceneKey } }),
-      wx.cloud.callFunction({ name: 'generateScript', data: { scene: this.data.sceneKey } })
-    ]).then(([fbRes, scriptRes]) => {
+      safeCall('roleplayEnd', { history: this.rpHistory, scene: this.data.sceneKey }),
+      safeCall('generateScript', { scene: this.data.sceneKey })
+    ]).then(([feedback, script]) => {
       wx.hideToast()
-      getApp().globalData.trainingResult = {
-        feedback: fbRes.result || {},
-        script: scriptRes.result || {}
-      }
+      getApp().globalData.trainingResult = { feedback, script }
       wx.navigateTo({ url: '/pages/result/result?scene=' + this.data.sceneKey + '&mode=trained' })
       this.setData({ inChat: false, loadingText: '' })
     }).catch(e => {
