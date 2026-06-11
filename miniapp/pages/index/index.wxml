@@ -37,27 +37,17 @@
     </view>
 
     <view class="input-area">
-      <view class="input-row">
-        <!-- 键盘模式 -->
-        <block wx:if="{{!voiceMode}}">
-          <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
-          <view class="voice-toggle" bindtap="toggleVoice">🎤</view>
-        </block>
-        <!-- 语音模式（微信风格） -->
-        <block wx:else>
-          <view class="voice-btn {{recording ? 'voice-recording' : ''}}" bindtouchstart="startRecord" bindtouchend="stopRecord" bindtouchcancel="stopRecord">
-            {{recording ? '松开 结束' : '按住 说话'}}
-          </view>
-          <view class="voice-toggle" bindtap="toggleVoice">⌨️</view>
-        </block>
-        <view class="send-btn {{(!inputText || loading) ? 'send-disabled' : ''}}" bindtap="sendMessage">发送</view>
-      </view>
-      <!-- 录音状态提示 -->
-      <view wx:if="{{recording}}" class="record-tip">
-        <view class="record-wave">
-          <view class="wave-bar" wx:for="{{[1,2,3,4,5,6,7,8,9,10,11,12,13,14]}}" wx:key="*this"></view>
+      <view wx:if="{{recording}}" class="record-overlay">
+        <view class="record-wave-big">
+          <view class="wave-bar-big" wx:for="{{[1,2,3,4,5,6,7,8,9,10,11,12,13,14]}}" wx:key="*this"></view>
         </view>
-        <text>手指上滑，取消发送</text>
+        <view class="record-hint">松开发送，上滑取消</view>
+        <view class="record-stop-btn" bindtap="stopRecord">松开 停止</view>
+      </view>
+      <view class="input-row">
+        <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
+        <view class="mic-hold-btn {{recording ? 'mic-hold-active' : ''}}" bindtouchstart="startRecord" bindtouchend="stopRecord" bindtouchcancel="stopRecord">🎤</view>
+        <view class="send-btn {{(!inputText || loading) ? 'send-disabled' : ''}}" bindtap="sendMessage">发送</view>
       </view>
       <view class="chat-actions">
         <view class="action-btn end-btn" bindtap="endChat">📊 结束对话 · 评分</view>

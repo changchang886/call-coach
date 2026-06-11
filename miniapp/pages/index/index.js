@@ -10,7 +10,6 @@ Page({
     initializing: false,
     loading: false,
     recording: false,
-    voiceMode: false,
     sceneKey: '',
     sceneName: '',
     persona: '',
@@ -43,7 +42,7 @@ Page({
         wx.hideLoading()
         const data = sttRes.result || {}
         if (data.text) {
-          this.setData({ inputText: data.text, voiceMode: false })
+          this.setData({ inputText: data.text })
         } else {
           wx.showToast({ title: data.error || '未识别到文字', icon: 'none', duration: 5000 })
         }
@@ -61,11 +60,8 @@ Page({
     this._rm = rm
   },
 
-  toggleVoice() {
-    this.setData({ voiceMode: !this.data.voiceMode })
-  },
-
   startRecord() {
+    console.log('=== startRecord called ===')
     if (this.data.loading || this.data.recording) return
     this.setData({ recording: true, inputText: '' })
     this._rm.start({ duration: 30000, sampleRate: 16000, numberOfChannels: 1, format: 'pcm' })
