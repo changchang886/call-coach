@@ -1,0 +1,10 @@
+{
+  "name": "zui-qiang-dui-hua",
+  "version": "1.0.0",
+  "scripts": {
+    "upload": "node upload.js"
+  },
+  "devDependencies": {
+    "miniprogram-ci": "^2.1.31"
+  }
+}
