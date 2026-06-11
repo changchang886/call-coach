@@ -14,6 +14,19 @@
         </view>
       </block>
     </view>
+
+    <!-- 诊断 -->
+    <view class="diag-area">
+      <button class="diag-btn" bindtap="runCheck" disabled="{{checking}}">
+        🔍 {{checking ? '检查中...' : '一键诊断'}}
+      </button>
+      <view wx:if="{{checkResults.length}}" class="diag-results">
+        <view wx:for="{{checkResults}}" wx:key="check" class="diag-row">
+          <text>{{item.status}} {{item.check}}：{{item.detail}}</text>
+        </view>
+        <view class="diag-summary">{{checkSummary}}</view>
+      </view>
+    </view>
   </view>
 
   <view wx:if="{{inChat}}" class="chat-view">

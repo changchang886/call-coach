@@ -17,6 +17,9 @@ Page({
     messages: [],
     inputText: '',
     loadingText: '',
+    checking: false,
+    checkResults: [],
+    checkSummary: '',
   },
 
   onLoad() {
@@ -132,5 +135,25 @@ Page({
 
   goBack() {
     this.setData({ inChat: false, messages: [], inputText: '', loadingText: '' })
+  },
+
+  runCheck() {
+    this.setData({ checking: true, checkResults: [], checkSummary: '' })
+    wx.cloud.callFunction({ name: 'checkConfig' })
+      .then(res => {
+        const data = res.result || {}
+        this.setData({
+          checkResults: data.results || [],
+          checkSummary: data.summary || '',
+          checking: false,
+        })
+      })
+      .catch(e => {
+        this.setData({
+          checkResults: [{ check: '调用失败', status: '❌', detail: e.message }],
+          checkSummary: '云函数 checkConfig 未部署，右键上传',
+          checking: false,
+        })
+      })
   },
 })
