@@ -38,9 +38,26 @@
 
     <view class="input-area">
       <view class="input-row">
-        <input class="chat-input" value="{{inputText}}" placeholder="{{recording ? '正在聆听...' : '输入你要说的话...'}}" bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading || recording}}" />
-        <view class="mic-btn {{recording ? 'mic-active' : ''}}" bindtouchstart="startRecord" bindtouchend="stopRecord">🎤</view>
+        <!-- 键盘模式 -->
+        <block wx:if="{{!voiceMode}}">
+          <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
+          <view class="voice-toggle" bindtap="toggleVoice">🎤</view>
+        </block>
+        <!-- 语音模式（微信风格） -->
+        <block wx:else>
+          <view class="voice-btn {{recording ? 'voice-recording' : ''}}" bindtouchstart="startRecord" bindtouchend="stopRecord" bindtouchcancel="stopRecord">
+            {{recording ? '松开 结束' : '按住 说话'}}
+          </view>
+          <view class="voice-toggle" bindtap="toggleVoice">⌨️</view>
+        </block>
         <view class="send-btn {{(!inputText || loading) ? 'send-disabled' : ''}}" bindtap="sendMessage">发送</view>
+      </view>
+      <!-- 录音状态提示 -->
+      <view wx:if="{{recording}}" class="record-tip">
+        <view class="record-wave">
+          <view class="wave-bar" wx:for="{{[1,2,3,4,5,6,7,8,9,10,11,12,13,14]}}" wx:key="*this"></view>
+        </view>
+        <text>手指上滑，取消发送</text>
       </view>
       <view class="chat-actions">
         <view class="action-btn end-btn" bindtap="endChat">📊 结束对话 · 评分</view>

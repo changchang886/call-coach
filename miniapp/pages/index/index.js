@@ -10,6 +10,7 @@ Page({
     initializing: false,
     loading: false,
     recording: false,
+    voiceMode: false,
     sceneKey: '',
     sceneName: '',
     persona: '',
@@ -42,7 +43,7 @@ Page({
         wx.hideLoading()
         const data = sttRes.result || {}
         if (data.text) {
-          this.setData({ inputText: data.text })
+          this.setData({ inputText: data.text, voiceMode: false })
         } else {
           wx.showToast({ title: data.error || '未识别到文字', icon: 'none' })
         }
@@ -58,6 +59,10 @@ Page({
       wx.showToast({ title: '录音失败', icon: 'none' })
     }
     this._rm = rm
+  },
+
+  toggleVoice() {
+    this.setData({ voiceMode: !this.data.voiceMode })
   },
 
   startRecord() {
