@@ -1,0 +1,14 @@
+{
+  "envId": "cloudbase-d6gywfjz3008a9c0b",
+  "functionRoot": "./cloudfunctions",
+  "functions": [
+    { "name": "ping", "timeout": 5, "runtime": "Nodejs18.15" },
+    { "name": "generateScript", "timeout": 20, "runtime": "Nodejs18.15" },
+    { "name": "roleplayStart", "timeout": 20, "runtime": "Nodejs18.15" },
+    { "name": "roleplayTurn", "timeout": 20, "runtime": "Nodejs18.15" },
+    { "name": "roleplayEnd", "timeout": 20, "runtime": "Nodejs18.15" },
+    { "name": "getScenes", "timeout": 5, "runtime": "Nodejs18.15" },
+    { "name": "testAI", "timeout": 20, "runtime": "Nodejs18.15" },
+    { "name": "netTest", "timeout": 25, "runtime": "Nodejs18.15" }
+  ]
+}
