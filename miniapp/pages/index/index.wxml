@@ -18,10 +18,14 @@
 
     <view class="scene-grid">
       <block wx:for="{{scenes}}" wx:key="key">
-        <view class="scene-card" bindtap="startChat" data-key="{{item.key}}">
+        <view class="scene-card">
           <text class="scene-emoji">{{item.emoji}}</text>
           <text class="scene-name">{{item.name}}</text>
           <text class="scene-goal">{{item.goal}}</text>
+          <view class="card-btns">
+            <button class="card-btn train" bindtap="startChat" data-key="{{item.key}}">🎯 实战</button>
+            <button class="card-btn script" bindtap="quickScript" data-key="{{item.key}}">⚡ 话术</button>
+          </view>
         </view>
       </block>
     </view>

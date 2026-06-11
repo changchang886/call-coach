@@ -146,6 +146,25 @@ Page({
     this.setData({ inChat: false, loadingText: '' })
   },
 
+  // 首页直接看话术（不进对话）
+  quickScript(e) {
+    const key = e.currentTarget.dataset.key
+    if (!key) return
+    this.setData({ sceneKey: key, loadingText: '生成话术中...' })
+    wx.cloud.callFunction({
+      name: 'generateScript',
+      data: { scene: key }
+    }).then(res => {
+      const app = getApp()
+      app.globalData.trainingResult = { feedback: null, script: res.result || {} }
+      wx.navigateTo({ url: '/pages/result/result?scene=' + key + '&mode=skip' })
+      this.setData({ loadingText: '' })
+    }).catch(() => {
+      wx.showToast({ title: '生成失败', icon: 'none' })
+      this.setData({ loadingText: '' })
+    })
+  },
+
   skipChat() {
     this.setData({ loadingText: '生成话术中...' })
     wx.cloud.callFunction({
