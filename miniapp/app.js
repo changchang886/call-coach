@@ -1,5 +1,5 @@
 /**
- * 最强模拟 App（重构版）
+ * 最强对话 App（重构版）
  * 支持微信原生 AI + 云开发双通道
  */
 const CLOUD_ENV = 'cloudbase-d6gywfjz3008a9c0b'
@@ -11,7 +11,7 @@ App({
   },
 
   onLaunch() {
-    console.log('📞 最强模拟 v2 启动')
+    console.log('📞 最强对话 v2 启动')
 
     // 初始化云开发
     if (wx.cloud) {

@@ -1,5 +1,5 @@
 /**
- * 最强模拟 · 首页
+ * 最强对话 · 首页
  */
 const { getSceneList } = require('../../config/scenes')
 

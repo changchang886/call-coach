@@ -1,8 +1,8 @@
-<!-- 最强模拟 · 首页 -->
+<!-- 最强对话 · 首页 -->
 <view class="container">
   <view wx:if="{{!inChat}}" class="scene-view">
     <view class="header">
-      <text class="title">📞 最强模拟</text>
+      <text class="title">📞 最强对话</text>
       <text class="subtitle">选场景，真人演练，沉浸式对话</text>
     </view>
 

@@ -4,7 +4,7 @@
     "pages/result/result"
   ],
   "window": {
-    "navigationBarTitleText": "最强模拟",
+    "navigationBarTitleText": "最强对话",
     "navigationBarBackgroundColor": "#0f172a",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#0f172a"

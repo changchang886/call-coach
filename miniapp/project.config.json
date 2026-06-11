@@ -1,7 +1,7 @@
 {
   "appid": "wx46a1c62bedb43a2d",
   "cloudfunctionRoot": "cloudfunctions/",
-  "projectname": "最强模拟",
+  "projectname": "最强对话",
   "setting": {
     "urlCheck": false,
     "es6": true,
