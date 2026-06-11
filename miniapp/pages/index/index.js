@@ -2,6 +2,7 @@
  * 最强对话 · 首页
  */
 const { getSceneList } = require('../../config/scenes')
+const plugin = requirePlugin('WechatSI')
 
 Page({
   data: {
@@ -9,6 +10,7 @@ Page({
     inChat: false,
     initializing: false,
     loading: false,
+    recording: false,
     sceneKey: '',
     sceneName: '',
     persona: '',
@@ -19,6 +21,44 @@ Page({
 
   onLoad() {
     this.setData({ scenes: getSceneList() })
+    this.initSpeech()
+  },
+
+  initSpeech() {
+    try {
+      this.recorder = plugin.getRecordRecognitionManager()
+      this.recorder.onRecognize = (res) => {
+        // 实时识别结果
+        if (res.result) {
+          this.setData({ inputText: res.result })
+        }
+      }
+      this.recorder.onStop = (res) => {
+        // 最终识别结果
+        this.setData({ recording: false })
+        if (res.result) {
+          this.setData({ inputText: res.result })
+        }
+      }
+      this.recorder.onError = (err) => {
+        this.setData({ recording: false })
+        console.log('语音识别错误:', err)
+        wx.showToast({ title: '语音识别失败，请重试', icon: 'none' })
+      }
+    } catch (e) {
+      console.log('语音插件初始化失败:', e)
+    }
+  },
+
+  startRecord() {
+    if (!this.recorder || this.data.loading || this.data.recording) return
+    this.setData({ recording: true, inputText: '' })
+    this.recorder.start({ duration: 30000, lang: 'zh_CN' })
+  },
+
+  stopRecord() {
+    if (!this.recorder || !this.data.recording) return
+    this.recorder.stop()
   },
 
   startChat(e) {
