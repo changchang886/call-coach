@@ -84,35 +84,50 @@ Page({
   },
 
   endChat() {
-    if (!this.rpHistory) return
+    console.log('endChat tapped, rpHistory:', !!this.rpHistory)
+    if (!this.rpHistory) {
+      wx.showToast({ title: '请先开始对话', icon: 'none' })
+      return
+    }
+    wx.showToast({ title: '评分中...', icon: 'loading', duration: 10000 })
     this.setData({ loadingText: '评分中...' })
 
     Promise.all([
       wx.cloud.callFunction({ name: 'roleplayEnd', data: { history: this.rpHistory, scene: this.data.sceneKey } }),
       wx.cloud.callFunction({ name: 'generateScript', data: { scene: this.data.sceneKey } })
     ]).then(([fbRes, scriptRes]) => {
+      wx.hideToast()
       getApp().globalData.trainingResult = {
         feedback: fbRes.result || {},
         script: scriptRes.result || {}
       }
       wx.navigateTo({ url: '/pages/result/result?scene=' + this.data.sceneKey + '&mode=trained' })
       this.setData({ inChat: false, loadingText: '' })
-    }).catch(() => {
-      wx.showToast({ title: '评分失败', icon: 'none' })
+    }).catch(e => {
+      wx.hideToast()
+      wx.showModal({ title: '评分失败', content: (e && e.message) || '请重试', showCancel: false })
       this.setData({ loadingText: '' })
     })
   },
 
   skipChat() {
+    console.log('skipChat tapped, sceneKey:', this.data.sceneKey)
+    if (!this.data.sceneKey) {
+      wx.showToast({ title: '请先选择场景', icon: 'none' })
+      return
+    }
+    wx.showToast({ title: '生成中...', icon: 'loading', duration: 10000 })
     this.setData({ loadingText: '生成话术中...' })
     wx.cloud.callFunction({ name: 'generateScript', data: { scene: this.data.sceneKey } })
       .then(res => {
+        wx.hideToast()
         getApp().globalData.trainingResult = { feedback: null, script: res.result || {} }
         wx.navigateTo({ url: '/pages/result/result?scene=' + this.data.sceneKey + '&mode=skip' })
         this.setData({ inChat: false, loadingText: '' })
       })
-      .catch(() => {
-        wx.showToast({ title: '生成失败', icon: 'none' })
+      .catch(e => {
+        wx.hideToast()
+        wx.showModal({ title: '生成失败', content: (e && e.message) || '请重试', showCancel: false })
         this.setData({ loadingText: '' })
       })
   },
