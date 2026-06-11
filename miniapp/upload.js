@@ -2,6 +2,10 @@
  * 自动上传小程序（miniprogram-ci）
  * 用法: node upload.js [版本号] [备注]
  */
+// 强制 IPv4（微信服务器只接受 IPv4 白名单）
+const dns = require('dns')
+dns.setDefaultResultOrder('ipv4first')
+
 const ci = require('miniprogram-ci')
 const path = require('path')
 const fs = require('fs')
