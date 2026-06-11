@@ -41,12 +41,11 @@
         <view class="record-wave-big">
           <view class="wave-bar-big" wx:for="{{[1,2,3,4,5,6,7,8,9,10,11,12,13,14]}}" wx:key="*this"></view>
         </view>
-        <view class="record-hint">松开发送，上滑取消</view>
-        <view class="record-stop-btn" bindtap="stopRecord">松开 停止</view>
+        <view class="record-hint">🎤 正在录音... 点击麦克风停止</view>
       </view>
       <view class="input-row">
         <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
-        <button class="mic-hold-btn {{recording ? 'mic-hold-active' : ''}}" catchtouchstart="startRecord" catchtouchend="stopRecord" catchtouchcancel="stopRecord">🎤</button>
+        <button class="mic-hold-btn {{recording ? 'mic-hold-active' : ''}}" bindtap="{{recording ? 'stopRecord' : 'startRecord'}}">{{recording ? '⏹' : '🎤'}}</button>
         <view class="send-btn {{(!inputText || loading) ? 'send-disabled' : ''}}" bindtap="sendMessage">发送</view>
       </view>
       <view class="chat-actions">
