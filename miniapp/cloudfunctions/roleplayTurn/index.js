@@ -13,40 +13,26 @@ function aiChat(messages, opts = {}) {
       res.on('data', c => data += c)
       res.on('end', () => {
         try { resolve(JSON.parse(data).choices[0].message.content.trim()) }
-        catch (e) { reject(new Error('解析失败')) }
+        catch (e) { reject(new Error('响应解析失败')) }
       })
     })
     req.on('error', reject)
     req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
-    req.write(body)
-    req.end()
+    req.write(body); req.end()
   })
 }
 
 exports.main = async (event) => {
-  const { session, message } = event
-  if (!session || !message) return { error: '缺少参数' }
+  const { history, message } = event
+  if (!history || !message) return { error: '缺少参数' }
 
-  let history = [], turn = 0
-  try {
-    const cloud = require('wx-server-sdk')
-    cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-    const doc = await cloud.database().collection('sessions').doc(session).get()
-    if (!doc.data) throw new Error('not found')
-    history = doc.data.history || []
-    turn = (doc.data.turn || 0) + 1
-  } catch (_) { return { error: '会话已过期，请重新开始' } }
-
-  history.push({ role: 'user', content: message })
+  const msgs = [...history, { role: 'user', content: message }]
 
   try {
-    const reply = await aiChat(history)
-    history.push({ role: 'assistant', content: reply })
-
-    const cloud = require('wx-server-sdk')
-    cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-    await cloud.database().collection('sessions').doc(session).update({ data: { history, turn } })
-
-    return { message: reply, turn }
-  } catch (e) { return { error: 'AI请求失败: ' + e.message } }
+    const reply = await aiChat(msgs)
+    msgs.push({ role: 'assistant', content: reply })
+    return { history: msgs, reply }
+  } catch (e) {
+    return { error: 'AI请求失败: ' + e.message }
+  }
 }

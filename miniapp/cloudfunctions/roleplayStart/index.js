@@ -13,13 +13,12 @@ function aiChat(messages, opts = {}) {
       res.on('data', c => data += c)
       res.on('end', () => {
         try { resolve(JSON.parse(data).choices[0].message.content.trim()) }
-        catch (e) { reject(new Error('JSON解析失败')) }
+        catch (e) { reject(new Error('响应解析失败')) }
       })
     })
     req.on('error', reject)
     req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
-    req.write(body)
-    req.end()
+    req.write(body); req.end()
   })
 }
 
@@ -36,24 +35,18 @@ exports.main = async (event) => {
   const s = SCENES[event.scene]
   if (!s) return { error: '场景不存在' }
 
-  const system = { role: 'system', content: `你正在扮演${s.persona}。话题：${s.goal}。态度：${s.vibe}。你是真实的普通人不是NPC，有顾虑有立场有情绪。每次回1-3句话，像真实通话。` }
-  const history = [system]
+  const systemMsg = `你现在正在扮演${s.persona}。这是一个模拟电话通话。话题：${s.goal}。态度：${s.vibe}。你是真实的普通人不是NPC，有顾虑有立场有情绪。每次回1-3句话，像真实通话。`
+
+  const history = [{ role: 'system', content: systemMsg }]
 
   try {
     const opening = await aiChat([...history, { role: 'user', content: '电话铃声响了，请接起电话。只说开场白。' }])
     history.push({ role: 'assistant', content: opening })
-
-    let sessionId = ''
-    try {
-      const cloud = require('wx-server-sdk')
-      cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-      const db = cloud.database()
-      const res = await db.collection('sessions').add({ data: { scene: event.scene, history, turn: 0, createdAt: Date.now() } })
-      sessionId = res._id
-    } catch (_) { sessionId = 'local-' + Date.now() }
-
-    return { session: sessionId, role: s.persona, message: opening, scene: event.scene }
+    return { history, opening, persona: s.persona }
   } catch (e) {
-    return { error: 'AI请求失败: ' + e.message, message: '喂？你好。' }
+    // 兜底：不用 AI 也能开始
+    const fallback = '喂？你好。'
+    history.push({ role: 'assistant', content: fallback })
+    return { history, opening: fallback, persona: s.persona }
   }
 }

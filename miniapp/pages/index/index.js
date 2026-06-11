@@ -1,6 +1,6 @@
 /**
- * 最强模拟 · 首页（重构版）
- * 支持：微信原生 AI 直连 / 云函数 fallback
+ * 最强模拟 · 首页 v3
+ * 对话历史前端自管，不依赖云数据库
  */
 const { getSceneList } = require('../../config/scenes')
 
@@ -12,9 +12,8 @@ Page({
     loading: false,
     sceneKey: '',
     sceneName: '',
-    sceneGoal: '',
     persona: '',
-    messages: [],
+    messages: [],      // 展示用 [{role, content}]
     inputText: '',
     loadingText: '',
     checking: false,
@@ -33,7 +32,7 @@ Page({
 
     this.setData({
       inChat: true, initializing: true,
-      sceneKey: key, sceneName: scene.name, sceneGoal: scene.goal,
+      sceneKey: key, sceneName: scene.name,
       persona: scene.persona || '对方',
       messages: [], inputText: '', loadingText: '接通中...'
     })
@@ -44,14 +43,16 @@ Page({
     }).then(res => {
       const data = res.result || {}
       if (data.error) {
-        wx.showToast({ title: data.error, icon: 'none' })
+        wx.showModal({ title: 'AI错误', content: data.error, showCancel: false })
         this.setData({ inChat: false, initializing: false })
         return
       }
-      this.rpSession = data.session
+      // 保存完整的 conversation history（含 system prompt）
+      this.rpHistory = data.history || [{ role: 'system', content: '' }, { role: 'assistant', content: data.opening }]
       this.setData({
         initializing: false, loadingText: '',
-        messages: [{ role: 'assistant', content: data.message }]
+        persona: data.persona || this.data.persona,
+        messages: [{ role: 'assistant', content: data.opening }]
       })
     }).catch((err) => {
       wx.showModal({ title: '连接失败', content: err.message || '请确认云函数已部署', showCancel: false })
@@ -65,13 +66,13 @@ Page({
 
   sendMessage() {
     const text = this.data.inputText.trim()
-    if (!text || !this.rpSession || this.data.loading) return
+    if (!text || !this.rpHistory || this.data.loading) return
     const msgs = [...this.data.messages, { role: 'user', content: text }]
     this.setData({ messages: msgs, inputText: '', loading: true })
 
     wx.cloud.callFunction({
       name: 'roleplayTurn',
-      data: { session: this.rpSession, message: text }
+      data: { history: this.rpHistory, message: text }
     }).then(res => {
       const data = res.result || {}
       if (data.error) {
@@ -79,22 +80,30 @@ Page({
         this.setData({ loading: false })
         return
       }
+      // 更新 history + 展示消息
+      this.rpHistory = data.history || this.rpHistory
       this.setData({
-        messages: [...this.data.messages, { role: 'assistant', content: data.message }],
+        messages: [...this.data.messages, { role: 'assistant', content: data.reply }],
         loading: false
       })
     }).catch(() => {
-      wx.showToast({ title: '发送失败，请重试', icon: 'none' })
+      wx.showToast({ title: '发送失败', icon: 'none' })
       this.setData({ loading: false })
     })
   },
 
   endChat() {
-    if (!this.rpSession) return
+    if (!this.rpHistory) return
     this.setData({ loadingText: '评分中...' })
 
-    const fbP = wx.cloud.callFunction({ name: 'roleplayEnd', data: { session: this.rpSession } })
-    const scriptP = wx.cloud.callFunction({ name: 'generateScript', data: { scene: this.data.sceneKey } })
+    const fbP = wx.cloud.callFunction({
+      name: 'roleplayEnd',
+      data: { history: this.rpHistory, scene: this.data.sceneKey }
+    })
+    const scriptP = wx.cloud.callFunction({
+      name: 'generateScript',
+      data: { scene: this.data.sceneKey }
+    })
 
     Promise.all([fbP, scriptP]).then(([fbRes, scriptRes]) => {
       const app = getApp()
@@ -105,11 +114,10 @@ Page({
       wx.navigateTo({
         url: '/pages/result/result?scene=' + this.data.sceneKey + '&mode=trained'
       })
-      this.setData({ inChat: false, loadingText: '' })
     }).catch(() => {
       wx.showToast({ title: '评分失败，请重试', icon: 'none' })
-      this.setData({ loadingText: '' })
     })
+    this.setData({ inChat: false, loadingText: '' })
   },
 
   skipChat() {
@@ -128,7 +136,7 @@ Page({
       })
       this.setData({ inChat: false, loadingText: '' })
     }).catch(() => {
-      wx.showToast({ title: '生成失败，请重试', icon: 'none' })
+      wx.showToast({ title: '生成失败', icon: 'none' })
       this.setData({ loadingText: '' })
     })
   },
@@ -151,7 +159,7 @@ Page({
       .catch(e => {
         this.setData({
           checkResults: [{ check: '调用失败', status: '❌', detail: e.message }],
-          checkSummary: '云函数 checkConfig 未部署，右键上传',
+          checkSummary: '云函数 checkConfig 未部署',
           checking: false,
         })
       })
