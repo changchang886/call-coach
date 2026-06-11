@@ -28,6 +28,8 @@ Page({
         improvePoints: fb.improve || [],
         script: result.script,
       })
+    } else if (options.mode === 'skip' && result && result.script) {
+      this.setData({ script: result.script })
     } else {
       this.loadScript()
     }

@@ -17,23 +17,24 @@
     </view>
   </view>
 
-  <view wx:if="{{inChat}}" class="chat-view">
-    <view class="chat-header">
-      <text class="chat-scene">{{sceneName}}</text>
-      <text class="chat-persona">✆ {{persona}} 已接通</text>
-    </view>
-
-    <scroll-view class="chat-area" scroll-y>
-      <view wx:if="{{initializing}}" class="init-msg">{{loadingText}}</view>
-      <block wx:else>
-        <view wx:for="{{messages}}" wx:key="index" class="msg-item">
-          <view class="{{item.role === 'assistant' ? 'msg-bot' : 'msg-user'}}">
-            <text class="msg-label">{{item.role === 'assistant' ? '✆ ' + persona : '你'}}</text>
-            <view class="msg-bubble {{item.role === 'assistant' ? 'msg-bubble-bot' : 'msg-bubble-user'}}">{{item.content}}</view>
+  <view wx:if="{{inChat}}" class="chat-page">
+    <view class="chat-scroll-wrap">
+      <view class="chat-header">
+        <text class="chat-scene">{{sceneName}}</text>
+        <text class="chat-persona">✆ {{persona}} 已接通</text>
+      </view>
+      <scroll-view class="chat-area" scroll-y>
+        <view wx:if="{{initializing}}" class="init-msg">{{loadingText}}</view>
+        <block wx:else>
+          <view wx:for="{{messages}}" wx:key="index" class="msg-item">
+            <view class="{{item.role === 'assistant' ? 'msg-bot' : 'msg-user'}}">
+              <text class="msg-label">{{item.role === 'assistant' ? '✆ ' + persona : '你'}}</text>
+              <view class="msg-bubble {{item.role === 'assistant' ? 'msg-bubble-bot' : 'msg-bubble-user'}}">{{item.content}}</view>
+            </view>
           </view>
-        </view>
-      </block>
-    </scroll-view>
+        </block>
+      </scroll-view>
+    </view>
 
     <view class="input-area">
       <view class="input-row">
