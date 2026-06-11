@@ -1,4 +1,5 @@
-const { aiChat } = require('./common')
+const OpenAI = require('openai')
+const AI = new OpenAI({ apiKey: 'sk-98dc6f4f0a0f4f819c3575546396f86c', baseURL: 'https://api.deepseek.com' })
 
 exports.main = async (event) => {
   const { session, message } = event
@@ -12,14 +13,15 @@ exports.main = async (event) => {
     if (!doc.data) throw new Error('not found')
     history = doc.data.history || []
     turn = (doc.data.turn || 0) + 1
-  } catch (_) {
-    return { error: '会话已过期，请重新开始' }
-  }
+  } catch (_) { return { error: '会话已过期，请重新开始' } }
 
   history.push({ role: 'user', content: message })
 
   try {
-    const reply = await aiChat(history, { max_tokens: 150, temperature: 0.9 })
+    const resp = await AI.chat.completions.create({
+      model: 'deepseek-chat', messages: history, max_tokens: 150, temperature: 0.9
+    })
+    const reply = resp.choices[0].message.content.trim()
     history.push({ role: 'assistant', content: reply })
 
     const cloud = require('wx-server-sdk')
@@ -27,7 +29,5 @@ exports.main = async (event) => {
     await cloud.database().collection('sessions').doc(session).update({ data: { history, turn } })
 
     return { message: reply, turn }
-  } catch (e) {
-    return { error: '请求失败: ' + e.message }
-  }
+  } catch (e) { return { error: 'AI请求失败: ' + e.message } }
 }
