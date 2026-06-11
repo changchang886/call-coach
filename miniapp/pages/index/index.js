@@ -45,7 +45,7 @@ Page({
         if (data.text) {
           this.setData({ inputText: data.text, voiceMode: false })
         } else {
-          wx.showToast({ title: data.error || '未识别到文字', icon: 'none' })
+          wx.showToast({ title: data.error || '未识别到文字', icon: 'none', duration: 5000 })
         }
       }).catch(err => {
         wx.hideLoading()
@@ -68,7 +68,7 @@ Page({
   startRecord() {
     if (this.data.loading || this.data.recording) return
     this.setData({ recording: true, inputText: '' })
-    this._rm.start({ duration: 30000, format: 'mp3' })
+    this._rm.start({ duration: 30000, sampleRate: 16000, numberOfChannels: 1, format: 'pcm' })
   },
 
   stopRecord() {
