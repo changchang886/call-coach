@@ -53,8 +53,8 @@ Page({
         initializing: false, loadingText: '',
         messages: [{ role: 'assistant', content: data.message }]
       })
-    }).catch(() => {
-      wx.showToast({ title: '请求失败，请重试', icon: 'none' })
+    }).catch((err) => {
+      wx.showModal({ title: '连接失败', content: err.message || '请确认云函数已部署', showCancel: false })
       this.setData({ inChat: false, initializing: false })
     })
   },

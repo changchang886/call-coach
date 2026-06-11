@@ -1,5 +1,27 @@
-const OpenAI = require('openai')
-const AI = new OpenAI({ apiKey: 'sk-98dc6f4f0a0f4f819c3575546396f86c', baseURL: 'https://api.deepseek.com' })
+const https = require('https')
+const KEY = 'sk-98dc6f4f0a0f4f819c3575546396f86c'
+
+function aiChat(messages, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ model: 'deepseek-chat', messages, max_tokens: opts.max_tokens || 150, temperature: opts.temperature ?? 0.9 })
+    const req = https.request({
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(body) },
+      timeout: 15000
+    }, res => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        try { resolve(JSON.parse(data).choices[0].message.content.trim()) }
+        catch (e) { reject(new Error('解析失败')) }
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
+    req.write(body)
+    req.end()
+  })
+}
 
 exports.main = async (event) => {
   const { session, message } = event
@@ -18,10 +40,7 @@ exports.main = async (event) => {
   history.push({ role: 'user', content: message })
 
   try {
-    const resp = await AI.chat.completions.create({
-      model: 'deepseek-chat', messages: history, max_tokens: 150, temperature: 0.9
-    })
-    const reply = resp.choices[0].message.content.trim()
+    const reply = await aiChat(history)
     history.push({ role: 'assistant', content: reply })
 
     const cloud = require('wx-server-sdk')

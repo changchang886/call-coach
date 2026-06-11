@@ -1,5 +1,27 @@
-const OpenAI = require('openai')
-const AI = new OpenAI({ apiKey: 'sk-98dc6f4f0a0f4f819c3575546396f86c', baseURL: 'https://api.deepseek.com' })
+const https = require('https')
+const KEY = 'sk-98dc6f4f0a0f4f819c3575546396f86c'
+
+function aiChat(messages, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ model: 'deepseek-chat', messages, max_tokens: opts.max_tokens || 100, temperature: opts.temperature ?? 0.9 })
+    const req = https.request({
+      hostname: 'api.deepseek.com', path: '/v1/chat/completions', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(body) },
+      timeout: 15000
+    }, res => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        try { resolve(JSON.parse(data).choices[0].message.content.trim()) }
+        catch (e) { reject(new Error('JSON解析失败')) }
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
+    req.write(body)
+    req.end()
+  })
+}
 
 const SCENES = {
   salary:   { persona: '领导/HR',   goal: '和领导谈加薪/谈期望薪资', vibe: '自信而不冒犯' },
@@ -14,16 +36,11 @@ exports.main = async (event) => {
   const s = SCENES[event.scene]
   if (!s) return { error: '场景不存在' }
 
-  const system = { role: 'system', content: `你现在正在扮演${s.persona}。话题：${s.goal}。态度：${s.vibe}。你是真实的普通人不是NPC，有顾虑有立场有情绪。每次回1-3句话，像真实通话。` }
+  const system = { role: 'system', content: `你正在扮演${s.persona}。话题：${s.goal}。态度：${s.vibe}。你是真实的普通人不是NPC，有顾虑有立场有情绪。每次回1-3句话，像真实通话。` }
   const history = [system]
 
   try {
-    const resp = await AI.chat.completions.create({
-      model: 'deepseek-chat',
-      messages: [...history, { role: 'user', content: '电话铃声响了，请接起电话。只说开场白。' }],
-      max_tokens: 100, temperature: 0.9
-    })
-    const opening = resp.choices[0].message.content.trim()
+    const opening = await aiChat([...history, { role: 'user', content: '电话铃声响了，请接起电话。只说开场白。' }])
     history.push({ role: 'assistant', content: opening })
 
     let sessionId = ''
@@ -37,6 +54,6 @@ exports.main = async (event) => {
 
     return { session: sessionId, role: s.persona, message: opening, scene: event.scene }
   } catch (e) {
-    return { error: 'AI请求失败: ' + e.message }
+    return { error: 'AI请求失败: ' + e.message, message: '喂？你好。' }
   }
 }
