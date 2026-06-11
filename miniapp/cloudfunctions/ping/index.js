@@ -1,1 +1,3 @@
-exports.main = async () => ({ ok: true, time: Date.now(), msg: '云函数运行正常' })
+exports.main = async () => {
+  return { ok: true, time: new Date().toISOString(), node: process.version }
+}

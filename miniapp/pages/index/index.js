@@ -13,16 +13,43 @@ Page({
     sceneKey: '',
     sceneName: '',
     persona: '',
-    messages: [],      // 展示用 [{role, content}]
+    messages: [],
     inputText: '',
     loadingText: '',
     checking: false,
     checkResults: [],
     checkSummary: '',
+    testing: false,
+    testResult: '',
+    testOk: false,
   },
 
   onLoad() {
     this.setData({ scenes: getSceneList() })
+
+    // 进页面自动测一下云函数连通性
+    this.testPing()
+  },
+
+  testPing() {
+    this.setData({ testing: true, testResult: '测试中...' })
+    wx.cloud.callFunction({ name: 'ping' })
+      .then(res => {
+        const d = res.result || {}
+        this.setData({
+          testing: false,
+          testOk: true,
+          testResult: '✅ 云函数连通！Node ' + (d.node || '?') + ' | ' + (d.time || '')
+        })
+      })
+      .catch(err => {
+        this.setData({
+          testing: false,
+          testOk: false,
+          testResult: '❌ 云函数不可达: ' + (err.errMsg || err.message || 'ping未部署')
+        })
+      })
+  },
   },
 
   startChat(e) {

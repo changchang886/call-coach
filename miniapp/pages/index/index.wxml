@@ -5,6 +5,17 @@
       <text class="title">📞 最强模拟</text>
       <text class="subtitle">选场景，真人演练，沉浸式对话</text>
     </view>
+
+    <!-- 快速测试区 -->
+    <view class="quick-test">
+      <button class="test-btn" bindtap="testPing" disabled="{{testing}}">
+        🔌 {{testing ? '测试中...' : '测试云函数连通性'}}
+      </button>
+      <view wx:if="{{testResult}}" class="test-result {{testOk ? 'ok' : 'fail'}}">
+        {{testResult}}
+      </view>
+    </view>
+
     <view class="scene-grid">
       <block wx:for="{{scenes}}" wx:key="key">
         <view class="scene-card" bindtap="startChat" data-key="{{item.key}}">
@@ -14,19 +25,6 @@
         </view>
       </block>
     </view>
-
-    <!-- 诊断 -->
-    <view class="diag-area">
-      <button class="diag-btn" bindtap="runCheck" disabled="{{checking}}">
-        🔍 {{checking ? '检查中...' : '一键诊断'}}
-      </button>
-      <view wx:if="{{checkResults.length}}" class="diag-results">
-        <view wx:for="{{checkResults}}" wx:key="check" class="diag-row">
-          <text>{{item.status}} {{item.check}}：{{item.detail}}</text>
-        </view>
-        <view class="diag-summary">{{checkSummary}}</view>
-      </view>
-    </view>
   </view>
 
   <view wx:if="{{inChat}}" class="chat-view">
@@ -35,10 +33,10 @@
       <text class="chat-persona">✆ {{persona}} 已接通</text>
     </view>
 
-    <scroll-view class="chat-area" scroll-y scroll-into-view="msg-{{messages.length - 1}}">
-      <view wx:if="{{initializing}}" class="init-msg">接通中...</view>
+    <scroll-view class="chat-area" scroll-y>
+      <view wx:if="{{initializing}}" class="init-msg">{{loadingText}}</view>
       <block wx:else>
-        <view wx:for="{{messages}}" wx:key="index" id="msg-{{index}}" class="msg-item">
+        <view wx:for="{{messages}}" wx:key="index" class="msg-item">
           <view class="{{item.role === 'assistant' ? 'msg-bot' : 'msg-user'}}">
             <text class="msg-label">{{item.role === 'assistant' ? '✆ ' + persona : '你'}}</text>
             <view class="msg-bubble {{item.role === 'assistant' ? 'msg-bubble-bot' : 'msg-bubble-user'}}">{{item.content}}</view>
@@ -55,7 +53,7 @@
       <view class="chat-actions">
         <button class="action-btn end-btn" bindtap="endChat">📊 结束对话，看话术</button>
         <button class="action-btn skip-btn" bindtap="skipChat">⚡ 跳过，直接出话术</button>
-        <button class="action-btn back-btn" bindtap="goBack">← 返回选场景</button>
+        <button class="action-btn back-btn" bindtap="goBack">← 返回</button>
       </view>
     </view>
   </view>
