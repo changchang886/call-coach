@@ -3,12 +3,6 @@
     "pages/index/index",
     "pages/result/result"
   ],
-  "plugins": {
-    "WechatSI": {
-      "version": "0.3.6",
-      "provider": "wx069ba97219f66d99"
-    }
-  },
   "window": {
     "navigationBarTitleText": "最强对话",
     "navigationBarBackgroundColor": "#0f172a",

@@ -2,7 +2,6 @@
  * 最强对话 · 首页
  */
 const { getSceneList } = require('../../config/scenes')
-const plugin = requirePlugin('WechatSI')
 
 Page({
   data: {
@@ -21,44 +20,55 @@ Page({
 
   onLoad() {
     this.setData({ scenes: getSceneList() })
-    this.initSpeech()
+    this.initRecorder()
   },
 
-  initSpeech() {
-    try {
-      this.recorder = plugin.getRecordRecognitionManager()
-      this.recorder.onRecognize = (res) => {
-        // 实时识别结果
-        if (res.result) {
-          this.setData({ inputText: res.result })
+  initRecorder() {
+    const rm = wx.getRecorderManager()
+    rm.onStop = (res) => {
+      this.setData({ recording: false })
+      if (!res.tempFilePath) return
+
+      wx.showLoading({ title: '识别中...' })
+      wx.cloud.uploadFile({
+        cloudPath: 'voice/' + Date.now() + '.mp3',
+        filePath: res.tempFilePath
+      }).then(uploadRes => {
+        return wx.cloud.callFunction({
+          name: 'speechToText',
+          data: { fileID: uploadRes.fileID }
+        })
+      }).then(sttRes => {
+        wx.hideLoading()
+        const data = sttRes.result || {}
+        if (data.text) {
+          this.setData({ inputText: data.text })
+        } else {
+          wx.showToast({ title: data.error || '未识别到文字', icon: 'none' })
         }
-      }
-      this.recorder.onStop = (res) => {
-        // 最终识别结果
-        this.setData({ recording: false })
-        if (res.result) {
-          this.setData({ inputText: res.result })
-        }
-      }
-      this.recorder.onError = (err) => {
-        this.setData({ recording: false })
-        console.log('语音识别错误:', err)
-        wx.showToast({ title: '语音识别失败，请重试', icon: 'none' })
-      }
-    } catch (e) {
-      console.log('语音插件初始化失败:', e)
+      }).catch(err => {
+        wx.hideLoading()
+        console.log('语音识别失败:', err)
+        wx.showToast({ title: '识别失败，请重试', icon: 'none' })
+      })
     }
+    rm.onError = (err) => {
+      this.setData({ recording: false })
+      console.log('录音错误:', err)
+      wx.showToast({ title: '录音失败', icon: 'none' })
+    }
+    this._rm = rm
   },
 
   startRecord() {
-    if (!this.recorder || this.data.loading || this.data.recording) return
+    if (this.data.loading || this.data.recording) return
     this.setData({ recording: true, inputText: '' })
-    this.recorder.start({ duration: 30000, lang: 'zh_CN' })
+    this._rm.start({ duration: 30000, format: 'mp3' })
   },
 
   stopRecord() {
-    if (!this.recorder || !this.data.recording) return
-    this.recorder.stop()
+    if (!this.data.recording) return
+    this._rm.stop()
   },
 
   startChat(e) {

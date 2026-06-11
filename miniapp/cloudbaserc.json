@@ -9,6 +9,7 @@
     { "name": "roleplayEnd", "timeout": 20, "runtime": "Nodejs18.15" },
     { "name": "getScenes", "timeout": 5, "runtime": "Nodejs18.15" },
     { "name": "testAI", "timeout": 20, "runtime": "Nodejs18.15" },
-    { "name": "netTest", "timeout": 25, "runtime": "Nodejs18.15" }
+    { "name": "netTest", "timeout": 25, "runtime": "Nodejs18.15" },
+    { "name": "speechToText", "timeout": 30, "runtime": "Nodejs18.15" }
   ]
 }
