@@ -38,12 +38,12 @@
     <view class="input-area">
       <view class="input-row">
         <input class="chat-input" value="{{inputText}}" placeholder="输入你要说的话..." bindinput="onInput" bindconfirm="sendMessage" confirm-type="send" disabled="{{loading}}" />
-        <button class="send-btn" bindtap="sendMessage" disabled="{{!inputText || loading}}">发送</button>
+        <view class="send-btn {{(!inputText || loading) ? 'send-disabled' : ''}}" bindtap="sendMessage">发送</view>
       </view>
       <view class="chat-actions">
-        <button class="action-btn end-btn" bindtap="endChat">📊 结束对话，看话术</button>
-        <button class="action-btn skip-btn" bindtap="skipChat">⚡ 跳过，直接出话术</button>
-        <button class="action-btn back-btn" bindtap="goBack">← 返回</button>
+        <view class="action-btn end-btn" bindtap="endChat">📊 结束对话，看话术</view>
+        <view class="action-btn skip-btn" bindtap="skipChat">⚡ 跳过，直接出话术</view>
+        <view class="action-btn back-btn" bindtap="goBack">← 返回</view>
       </view>
     </view>
   </view>
